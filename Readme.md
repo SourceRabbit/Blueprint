@@ -1,3 +1,5 @@
+<img src="Assets/BlueprintLogo.png" alt="Blueprint logo" width="120">
+
 # Blueprint
 
 Blueprint is a backend application framework for .NET, **designed to provide a stable, consistent API across different underlying technologies**. Applications interact with Blueprint’s contracts and services, allowing infrastructure choices to evolve independently of business logic.
