@@ -14,7 +14,7 @@ Start with the [Getting Started guide](.wiki/Getting-Started.md) or browse the c
 
 ## Getting Started
 
-Add a project reference to `Blueprint/Blueprint/Blueprint.csproj`, define an entity contract, configure the database and languages, and register the contract. The successfully initialized database becomes active for Entity API calls automatically.
+Add a project reference to `Visual Studio Project/Blueprint/Blueprint.csproj`, define an entity contract, configure the database and languages, and register the contract. The successfully initialized database becomes active for Entity API calls automatically.
 
 Once the [Product contract](.wiki/Database-Tutorial-EShop-Checkout.md#define-a-contract) is registered and `database` is active:
 
@@ -36,4 +36,4 @@ The [complete checkout example](.wiki/Database-Tutorial-EShop-Checkout.md#comple
 
 ## Documentation
 
-The English consumer manual is maintained in the [`.wiki` directory](.wiki/README.md). It covers usage, examples, behavior, and limitations of the public API. For common errors, see [Troubleshooting](.wiki/Troubleshooting.md).
+The English consumer manual is maintained in the [`.wiki` directory](.wiki/README.md) and published to the [GitHub Wiki](https://github.com/SourceRabbit/Blueprint/wiki). The `Sync Wiki` workflow publishes documentation changes pushed to `main`. It covers usage, examples, behavior, and limitations of the public API. For common errors, see [Troubleshooting](.wiki/Troubleshooting.md).

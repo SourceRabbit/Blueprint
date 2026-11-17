@@ -2,7 +2,7 @@
 
 `SqlDatabase`, in the `Blueprint.Database.Sql` namespace, is Blueprint's Microsoft SQL Server provider. It inherits configuration, entity registration, and resource management from the abstract [BlueprintDatabase](Database-BlueprintDatabase.md) class and implements `IDisposable`.
 
-This guide covers connection settings, languages, entity registration, and application lifetime. Its complete example follows the [EntitiesTutorial](../Blueprint/Blueprint.Tests/Tutorial1/EntitiesTutorial.cs) initialization flow.
+This guide covers connection settings, languages, entity registration, and application lifetime. Its complete example follows the [EntitiesTutorial](../Visual%20Studio%20Project/Blueprint.Tests/Tutorial1/EntitiesTutorial.cs) initialization flow.
 
 Before writing code, read [Contributing](Contributing.md). Follow [Getting Started](Getting-Started.md) to reference Blueprint in a .NET 10 application using C# 14.
 
@@ -124,7 +124,7 @@ The name argument overrides any `Database` or `Initial Catalog` value in the sup
 
 Construction connects immediately. The current provider first connects to `master` to check for and, if necessary, create the named database, then initializes the application context. The account therefore needs access to `master` and the application database, plus database-creation permissions if the database is missing. Connection failures can occur before `RegisterEntity<Product>()` is called.
 
-The provider requires a server value, rejects `AttachDBFilename`, and does not accept `master`, `model`, `msdb`, or `tempdb` as the application database. Database names must contain 1 to 128 characters without leading or trailing whitespace or control characters. These rules come from the [SqlDatabase implementation](../Blueprint/Blueprint/Database/Sql/SqlDatabase.cs).
+The provider requires a server value, rejects `AttachDBFilename`, and does not accept `master`, `model`, `msdb`, or `tempdb` as the application database. Database names must contain 1 to 128 characters without leading or trailing whitespace or control characters. These rules come from the [SqlDatabase implementation](../Visual%20Studio%20Project/Blueprint/Database/Sql/SqlDatabase.cs).
 
 ## Complete example from EntitiesTutorial
 

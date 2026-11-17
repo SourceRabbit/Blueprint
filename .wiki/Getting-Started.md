@@ -22,7 +22,7 @@ Use a **project reference** when you have the Blueprint source and want to build
 ## Add a project reference
 
 1. Obtain a local checkout of the Blueprint repository.
-2. Add the library project, `Blueprint/Blueprint/Blueprint.csproj`, to your application's solution. This path is relative to the Blueprint repository root.
+2. Add the library project, `Visual Studio Project/Blueprint/Blueprint.csproj`, to your application's solution. This path is relative to the Blueprint repository root.
 3. In the consuming project's references, add a project reference to the Blueprint library project.
 4. Restore NuGet packages and build your application using your IDE or normal build workflow.
 
@@ -36,7 +36,7 @@ The project reference builds Blueprint with your application and brings its NuGe
 4. Add the required NuGet packages below to the consuming project, using its package manager.
 5. Restore packages and rebuild the application. Ensure its output and deployment contain the intended Blueprint assembly and resolved dependencies.
 
-A direct assembly reference does not automatically declare Blueprint's NuGet package dependencies. The following versions match the current [Blueprint project](../Blueprint/Blueprint/Blueprint.csproj):
+A direct assembly reference does not automatically declare Blueprint's NuGet package dependencies. The following versions match the current [Blueprint project](../Visual%20Studio%20Project/Blueprint/Blueprint.csproj):
 
 | NuGet package | Version |
 | --- | --- |

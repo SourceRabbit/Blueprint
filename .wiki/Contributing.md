@@ -204,6 +204,12 @@ Test consumer behavior through public APIs. Do not expose implementation details
 
 Run checks appropriate to the change. For documentation examples, verify that the code compiles and that relative links work. Update the relevant manual page when consumer behavior changes.
 
+## Publishing the GitHub Wiki
+
+Maintain the manual in the repository's `.wiki` directory. The `Sync Wiki` GitHub Actions workflow publishes changes pushed to `main`; it can also be started manually from the Actions tab. The GitHub Wiki must already have an initial page. Publishing uses the workflow's built-in `GITHUB_TOKEN` with `contents: write`, without a separate personal access token.
+
+The publishing script maps `README.md` to `Home.md`, converts page links to Wiki URLs, copies images, and links source files back to `main`. It validates local link targets before updating the Wiki. A synchronization manifest tracks published files so removed source pages are removed from the Wiki while independently created pages are preserved. Edits to generated pages should be made in `.wiki`, because publishing replaces those pages.
+
 ## Related topics
 
 [Getting Started](Getting-Started.md) · [EShop - Checkout Tutorial](Database-Tutorial-EShop-Checkout.md) · [Transactions](Database-Transactions.md)

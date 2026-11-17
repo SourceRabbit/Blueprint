@@ -2,7 +2,7 @@
 
 An entity is a public interface that extends `Blueprint.Database.Entities.BlueprintEntity` and has an `[Entity]` annotation. Blueprint generates its implementation when the contract is registered.
 
-This guide follows [EntitiesTutorial](../Blueprint/Blueprint.Tests/Tutorial1/EntitiesTutorial.cs): create a website user, add one iPhone to the user's basket, and complete checkout. Checkout saves an order and its items, reduces product stock, and clears the purchased basket in one database transaction.
+This guide follows [EntitiesTutorial](../Visual%20Studio%20Project/Blueprint.Tests/Tutorial1/EntitiesTutorial.cs): create a website user, add one iPhone to the user's basket, and complete checkout. Checkout saves an order and its items, reduces product stock, and clears the purchased basket in one database transaction.
 
 Before writing code, read [Contributing](Contributing.md). Use [Getting Started](Getting-Started.md) to reference Blueprint from a .NET 10 application using C# 14. Database setup and connection settings are explained in [SQL Server](Database-SqlServer.md).
 
