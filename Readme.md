@@ -1,12 +1,14 @@
-<img src="Assets/BlueprintLogo.png" alt="Blueprint logo" width="120">
-
 # Blueprint
+
+<img src="Assets/BlueprintLogo.png" alt="Blueprint logo" width="120" align="left">
 
 Blueprint is a backend application framework for .NET, **designed to provide a stable, consistent API across different underlying technologies**. Applications interact with Blueprint’s contracts and services, allowing infrastructure choices to evolve independently of business logic.
 
 Database access follows this approach through `BlueprintDatabase`: applications select a database provider during initialization while keeping the same API for entities, queries, and transactions. Microsoft SQL Server is currently supported, with MySQL support planned.
 
 Start with the [Getting Started guide](.wiki/Getting-Started.md) or browse the complete [Blueprint User Manual](.wiki/README.md).
+
+<br clear="left">
 
 ## Requirements
 
