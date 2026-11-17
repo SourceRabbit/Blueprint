@@ -6,7 +6,7 @@ Blueprint is a backend application framework for .NET, **designed to provide a s
 
 Database access follows this approach through `BlueprintDatabase`: applications select a database provider during initialization while keeping the same API for entities, queries, and transactions. Microsoft SQL Server is currently supported, with MySQL support planned.
 
-Start with the [Getting Started guide](.wiki/Getting-Started.md) or browse the complete [Blueprint User Manual](.wiki/README.md).
+Visit the [Blueprint Wiki](https://github.com/SourceRabbit/Blueprint/wiki) for setup instructions, documentation, and examples.
 
 <br clear="left">
 
