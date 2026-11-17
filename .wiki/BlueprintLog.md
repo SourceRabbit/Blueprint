@@ -1,8 +1,8 @@
 # BlueprintLog
 
-`BlueprintLog` is the **abstract base class** for application logging in the `Blueprint.Log` namespace. It defines the shared API for writing, reading, counting, and paginating events. It cannot be instantiated directly; create a concrete implementation and use it through a `BlueprintLog` reference.
+`BlueprintLog` is the **abstract base class** for application logging in the `Blueprint.Log` namespace. It defines the shared API for writing, reading, counting, paginating, and deleting events. It cannot be instantiated directly; create a concrete implementation and use it through a `BlueprintLog` reference.
 
-The base class captures `Environment.MachineName` once during construction and exposes it through the read-only `MachineName` property. `WriteToLog`, `ReadFromLog`, and `CountFromLog` are abstract methods: the concrete implementation supplies persistence, queries, and argument validation according to their contract. The base class does not open database connections or create storage.
+The base class captures `Environment.MachineName` once during construction and exposes it through the read-only `MachineName` property. `WriteToLog`, `ReadFromLog`, `CountFromLog`, and `DeleteFromLog` are abstract methods: the concrete implementation supplies persistence, queries, deletion, and argument validation according to their contract. The base class does not open database connections or create storage.
 
 ## Implementations
 
@@ -34,8 +34,9 @@ Read it through `log.MachineName`, for example when requesting events from the c
 | [WriteToLog(level, message, logger, exception)](#writetolog) | Persists one event with its level, message, optional source, and optional exception. |
 | [ReadFromLog(...)](#readfromlog) | Reads events by UTC interval, optionally filtering by level and machine, with unpaged or paged results. |
 | [CountFromLog(...)](#countfromlog) | Counts matching events before pagination using the same interval, level, and machine filters. |
+| [DeleteFromLog(dateTimeUtcBefore)](#deletefromlog) | Deletes all events strictly before a UTC cutoff, across all levels and machines. |
 
-All three methods are abstract; the selected log provider implements persistence and queries. The examples below assume an initialized `BlueprintLog` variable named `log`. See [Create a SQL log](SqlLog.md#create-a-sql-log) for initialization. Examples are independent and use these imports as needed:
+All four methods are abstract; the selected log provider implements persistence, queries, and deletion. The examples below assume an initialized `BlueprintLog` variable named `log`. See [Create a SQL log](SqlLog.md#create-a-sql-log) for initialization. Examples are independent and use these imports as needed:
 
 ```csharp
 using Blueprint.Log;
@@ -178,6 +179,21 @@ Console.WriteLine($"Events: {totalCount}; errors: {errorCount}; errors from this
 ```
 
 See [SqlLog: Count and paginate events](SqlLog.md#count-and-paginate-events) for a complete grid example and the effects of concurrent writes between count and read calls.
+
+### DeleteFromLog
+
+`DeleteFromLog(DateTime dateTimeUtcBefore)` returns `void` and deletes every event whose stored timestamp satisfies `Logged < dateTimeUtcBefore`. Events exactly at the cutoff or later are retained. Deletion covers all levels and machines in this log, including events written by other instances.
+
+The argument must have `Kind = DateTimeKind.Utc`; local and unspecified values throw `ArgumentException` without deleting anything. Fractional seconds in the cutoff are preserved. No matching events, including an empty log, is a successful no-op. Storage failures propagate to the caller, and previously returned `LogEntry` snapshots remain unchanged.
+
+For example, delete events older than thirty days:
+
+```csharp
+DateTime cutoffUtc = DateTime.UtcNow.AddDays(-30);
+log.DeleteFromLog(cutoffUtc);
+```
+
+Call the method explicitly when cleanup is required; it does not enable a recurring retention policy. Custom `BlueprintLog` implementations must implement this abstract method. See [SqlLog: Delete old events](SqlLog.md#delete-old-events) for SQL permissions and transaction behavior.
 
 ## Log levels
 

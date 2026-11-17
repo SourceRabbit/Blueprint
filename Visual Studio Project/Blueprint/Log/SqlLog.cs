@@ -3,7 +3,7 @@ using System.Data;
 
 namespace Blueprint.Log
 {
-    /// <summary>Writes and reads events in a dedicated SQL Server table using parameterized commands.</summary>
+    /// <summary>Writes, reads, and deletes events in a dedicated SQL Server table using parameterized commands.</summary>
     public sealed class SqlLog : BlueprintLog
     {
         private readonly string fConnectionString;
@@ -201,6 +201,31 @@ namespace Blueprint.Log
         {
             ValidateMachineName(machineName);
             return CountEntries(dateTimeUtcFrom, dateTimeUtcTo, level, machineName);
+        }
+
+        /// <summary>Synchronously deletes all events strictly before a UTC cutoff, independently of any application transaction.</summary>
+        /// <param name="dateTimeUtcBefore">The exclusive UTC cutoff, including any fractional seconds.</param>
+        /// <exception cref="ArgumentException">The cutoff does not use DateTimeKind.Utc.</exception>
+        /// <exception cref="SqlException">Connecting to or deleting from the database fails.</exception>
+        public override void DeleteFromLog(DateTime dateTimeUtcBefore)
+        {
+            if (dateTimeUtcBefore.Kind != DateTimeKind.Utc)
+            {
+                throw new ArgumentException("The deletion cutoff must use DateTimeKind.Utc.", nameof(dateTimeUtcBefore));
+            }
+
+            using (SqlConnection connection = new SqlConnection(fConnectionString))
+            {
+                using (SqlCommand command = connection.CreateCommand())
+                {
+                    command.CommandText = $"DELETE FROM {fTableName} WHERE [Logged] < @before;";
+                    SqlParameter before = command.Parameters.Add("@before", SqlDbType.DateTime2);
+                    before.Scale = 7;
+                    before.Value = dateTimeUtcBefore;
+                    connection.Open();
+                    command.ExecuteNonQuery();
+                }
+            }
         }
 
         /// <summary>Rejects invalid machine filters before they can be truncated or treated as absent.</summary>

@@ -7,7 +7,7 @@ namespace Blueprint.Tests.Log
     /// <summary>Verifies logging through the public API in an isolated SQL Server database.</summary>
     internal sealed class SqlLogTest : BlueprintTest
     {
-        /// <summary>Checks initialization, writing, reading, validation, and independence from application transactions.</summary>
+        /// <summary>Checks initialization, writing, reading, deletion, validation, and independence from application transactions.</summary>
         /// <exception cref="Exception">An assertion or SQL operation fails.</exception>
         public override void RunTest()
         {
@@ -31,6 +31,7 @@ namespace Blueprint.Tests.Log
                         CheckInvalidEvents(log, connection);
                         CheckTransactionsAndConcurrency(log, connection, settings.ConnectionString, databaseName);
                         CheckReadEvents(connection, settings.ConnectionString, databaseName);
+                        CheckDeleteEvents(connection, settings.ConnectionString, databaseName);
                     }
                 }
                 finally
@@ -306,6 +307,81 @@ namespace Blueprint.Tests.Log
             AssertThrows<SqlException>(() => log.ReadFromLog(fromUtc, toUtc), "Database failures must propagate instead of returning an empty list.");
             AssertThrows<SqlException>(() => log.ReadFromLog(fromUtc, toUtc, 0, 25), "Paged reads must propagate database failures.");
             AssertThrows<SqlException>(() => log.CountFromLog(fromUtc, toUtc), "Count failures must propagate instead of returning zero.");
+        }
+
+        /// <summary>Checks UTC deletion boundaries, all levels and machines, transaction independence, and continued logging.</summary>
+        /// <param name="connection">The open verification connection to the temporary database.</param>
+        /// <param name="connectionString">The temporary database connection settings.</param>
+        /// <param name="databaseName">The isolated database name.</param>
+        /// <exception cref="Exception">Setup, deletion, or an assertion fails.</exception>
+        private void CheckDeleteEvents(SqlConnection connection, string connectionString, string databaseName)
+        {
+            BlueprintLog log = new SqlLog(connectionString, databaseName, "DeleteLog");
+            DateTime cutoffUtc = new DateTime(2026, 11, 16, 12, 0, 0, DateTimeKind.Utc);
+            DateTime minimumUtc = DateTime.SpecifyKind(DateTime.MinValue, DateTimeKind.Utc);
+            DateTime maximumUtc = DateTime.SpecifyKind(DateTime.MaxValue, DateTimeKind.Utc);
+            EBlueprintLogLevel[] levels = Enum.GetValues<EBlueprintLogLevel>();
+            foreach (EBlueprintLogLevel level in levels)
+            {
+                log.WriteToLog(level, "Old " + level);
+            }
+            log.WriteToLog(EBlueprintLogLevel.Info, "At the cutoff");
+            log.WriteToLog(EBlueprintLogLevel.Warn, "After the cutoff");
+
+            using (SqlCommand command = connection.CreateCommand())
+            {
+                command.CommandText = """
+                    UPDATE [dbo].[DeleteLog]
+                    SET [Logged] = CASE
+                        WHEN [Id] <= @oldCount THEN DATEADD(second, -1, @cutoff)
+                        WHEN [Id] = @oldCount + 1 THEN @cutoff
+                        ELSE DATEADD(second, 1, @cutoff) END,
+                        [MachineName] = CASE WHEN [Id] % 2 = 0 THEN N'OtherMachine' ELSE [MachineName] END;
+                    """;
+                command.Parameters.Add("@oldCount", System.Data.SqlDbType.Int).Value = levels.Length;
+                SqlParameter cutoff = command.Parameters.Add("@cutoff", System.Data.SqlDbType.DateTime2);
+                cutoff.Scale = 7;
+                cutoff.Value = cutoffUtc;
+                command.ExecuteNonQuery();
+            }
+
+            IReadOnlyList<LogEntry> originalEntries = log.ReadFromLog(minimumUtc, maximumUtc);
+            Assert(originalEntries.Count == levels.Length + 2, "Deletion checks must begin with all old events and both retained events.");
+            AssertThrows<ArgumentException>(() => log.DeleteFromLog(DateTime.SpecifyKind(cutoffUtc, DateTimeKind.Local)), "Deletion must reject a local cutoff.");
+            AssertThrows<ArgumentException>(() => log.DeleteFromLog(DateTime.SpecifyKind(cutoffUtc, DateTimeKind.Unspecified)), "Deletion must reject an unspecified cutoff.");
+            Assert(log.CountFromLog(minimumUtc, maximumUtc) == originalEntries.Count, "Rejected deletion arguments must leave all rows unchanged.");
+
+            log.DeleteFromLog(minimumUtc);
+            Assert(log.CountFromLog(minimumUtc, maximumUtc) == originalEntries.Count, "A cutoff before every event must delete nothing.");
+            using (TransactionScope scope = new TransactionScope())
+            {
+                log.DeleteFromLog(cutoffUtc);
+            }
+
+            IReadOnlyList<LogEntry> remainingEntries = log.ReadFromLog(minimumUtc, maximumUtc);
+            Assert(remainingEntries.Select(entry => entry.Message).SequenceEqual(new string[] { "After the cutoff", "At the cutoff" }), "Deletion must remove all older levels and machines while retaining the exact boundary and later events, even after ambient rollback.");
+            Assert(originalEntries.Count == levels.Length + 2, "Deleting stored events must not change previously returned snapshots.");
+            log.DeleteFromLog(cutoffUtc);
+            Assert(log.CountFromLog(minimumUtc, maximumUtc) == 2, "Repeating the same deletion must leave retained events unchanged.");
+
+            log.DeleteFromLog(cutoffUtc.AddTicks(1));
+            Assert(log.ReadFromLog(minimumUtc, maximumUtc).Single().Message == "After the cutoff", "A fractional cutoff must delete the earlier whole-second event without rounding the cutoff down.");
+            log.DeleteFromLog(maximumUtc);
+            log.DeleteFromLog(maximumUtc);
+            Assert(log.CountFromLog(minimumUtc, maximumUtc) == 0, "Deleting every event and then deleting from an empty log must succeed.");
+
+            log.WriteToLog(EBlueprintLogLevel.Info, "Logging after cleanup");
+            Assert(log.ReadFromLog(minimumUtc, maximumUtc).Single().Message == "Logging after cleanup", "The log must remain usable after deleting all events.");
+            using (SqlCommand command = new SqlCommand("SELECT COUNT(*) FROM [dbo].[Log];", connection))
+            {
+                Assert((int)command.ExecuteScalar()! == 29, "Deletion must affect only the configured log table.");
+            }
+            using (SqlCommand command = new SqlCommand("DROP TABLE [dbo].[DeleteLog];", connection))
+            {
+                command.ExecuteNonQuery();
+            }
+            AssertThrows<SqlException>(() => log.DeleteFromLog(cutoffUtc), "SQL deletion failures must propagate to the caller.");
+            AssertThrows<ArgumentException>(() => log.DeleteFromLog(DateTime.SpecifyKind(cutoffUtc, DateTimeKind.Local)), "Invalid cutoffs must be rejected before executing SQL against a missing table.");
         }
 
         /// <summary>Verifies matching count filters and SQL paging against a fixed set of known events.</summary>

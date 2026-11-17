@@ -1,6 +1,6 @@
 namespace Blueprint.Log
 {
-    /// <summary>Defines the shared event-writing and reading contract and captures the originating machine.</summary>
+    /// <summary>Defines the shared event-writing, reading, and deletion contract and captures the originating machine.</summary>
     public abstract class BlueprintLog
     {
         private readonly string fMachineName;
@@ -106,6 +106,12 @@ namespace Blueprint.Log
         /// <exception cref="ArgumentException">The interval, level, or machine name is invalid.</exception>
         /// <exception cref="Exception">Counting the stored events fails.</exception>
         public abstract long CountFromLog(DateTime dateTimeUtcFrom, DateTime dateTimeUtcTo, EBlueprintLogLevel level, string machineName);
+
+        /// <summary>Deletes all events strictly before the supplied UTC timestamp, across all levels and machines.</summary>
+        /// <param name="dateTimeUtcBefore">The exclusive UTC cutoff; events at or after it are retained.</param>
+        /// <exception cref="ArgumentException">The cutoff does not use DateTimeKind.Utc.</exception>
+        /// <exception cref="Exception">Deleting the stored events fails.</exception>
+        public abstract void DeleteFromLog(DateTime dateTimeUtcBefore);
 
         /// <summary>The machine name captured when the log was initialized.</summary>
         public string MachineName

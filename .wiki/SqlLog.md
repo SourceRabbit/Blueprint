@@ -2,7 +2,7 @@
 
 `SqlLog` is the SQL Server implementation of the abstract `BlueprintLog` class. Both classes belong to the `Blueprint.Log` namespace. See [BlueprintLog](BlueprintLog.md) for the shared API, log levels, and `LogEntry` result type.
 
-This page covers SQL Server initialization, writing and reading events, counting and pagination, the SQL table, and execution behavior. These storage and connection details apply to `SqlLog`; see [MySqlLog (Coming Soon)](MySqlLog.md) for the planned MySQL implementation.
+This page covers SQL Server initialization, writing and reading events, counting and pagination, deleting old events, the SQL table, and execution behavior. These storage and connection details apply to `SqlLog`; see [MySqlLog (Coming Soon)](MySqlLog.md) for the planned MySQL implementation.
 
 ## Create a SQL log
 
@@ -51,7 +51,7 @@ Database and table names must contain 1 to 128 characters, with no control chara
 
 Initialization captures `Environment.MachineName` once, creates the database if missing, and creates the table if missing. The captured name is available through the read-only `MachineName` property and is included in every row written by that instance. It is not a `WriteToLog` argument.
 
-The SQL account must be able to connect to `master` and the target database, insert and select log rows, and create the database or table when needed. Initialization failures propagate to the caller.
+The SQL account must be able to connect to `master` and the target database, insert and select log rows, and create the database or table when needed. Using `DeleteFromLog` also requires `DELETE` permission on the log table. Initialization failures propagate to the caller.
 
 The timestamp default is defined only when creating a new table. Existing tables are reused without schema migration and must already support the columns and default shown below.
 
@@ -176,6 +176,23 @@ The UI should validate its one-based page number and positive page size, reset t
 
 Counting and reading are separate SQL operations, not one database snapshot. Concurrent inserts or deletions can change the total and shift rows between page requests, causing repeats or omissions while navigating a live log. Keep the same interval and filters during navigation and refresh the count and first page when updating the view. An already returned page remains unchanged.
 
+## Delete old events
+
+Use `log.DeleteFromLog(dateTimeUtcBefore)` to synchronously remove all rows with `Logged < dateTimeUtcBefore` from this logger's configured table. The method returns `void`. It includes all log levels and machines, retains events exactly at the cutoff or later, and leaves the table available for future logging.
+
+For example, with the initialized `BlueprintLog log` from above:
+
+```csharp
+DateTime cutoffUtc = DateTime.UtcNow.AddDays(-30);
+log.DeleteFromLog(cutoffUtc);
+```
+
+The cutoff must be a `DateTime` with `Kind = DateTimeKind.Utc`. Local or unspecified values throw `ArgumentException` before SQL execution. The cutoff is sent as a `datetime2(7)` parameter, preserving fractional seconds even though new log tables store whole-second timestamps. A cutoff one tick after a stored timestamp deletes that event; an equal cutoff retains it.
+
+Deletion uses one parameterized `DELETE` on an independent connection and requires `DELETE` permission on the configured table. An empty log or a cutoff with no older rows completes normally. SQL failures propagate as `SqlException`.
+
+Like log writes, deletion does not enlist in an ambient application transaction. Rolling back that transaction does not undo a completed log deletion. Previously returned entries and result collections remain unchanged; run a new read or count to observe the remaining rows.
+
 ## Log levels
 
 The caller chooses an [EBlueprintLogLevel](BlueprintLog.md#log-levels). `SqlLog` stores its name, such as `Error`, rather than its numeric enum value. All defined levels are written; there is no minimum-level filter. Casting an undefined numeric value to the enum results in an `ArgumentOutOfRangeException` when writing or filtering reads and counts.
@@ -209,12 +226,12 @@ The log table is managed by `SqlLog` and is not registered as a Blueprint entity
 ## Execution and errors
 
 - Writes are synchronous. A successful call returns after its SQL insert completes; it does not queue the event for later processing.
-- Each write, read, or count uses its own SQL connection and parameterized command. An instance can be reused for concurrent calls without sharing a mutable command or connection. Connection pooling remains enabled unless it is disabled in the supplied connection string.
-- Log connections do not enlist in ambient application transactions. Rolling back an application transaction does not roll back a log event that was successfully written.
+- Each write, read, count, or deletion uses its own SQL connection and parameterized command. An instance can be reused for concurrent calls without sharing a mutable command or connection. Connection pooling remains enabled unless it is disabled in the supplied connection string.
+- Log connections do not enlist in ambient application transactions. Rolling back an application transaction does not undo a completed log write or deletion.
 - Invalid arguments and SQL failures propagate to the caller. There is no built-in retry, fallback destination, or suppression of logging failures.
 - `SqlLog` does not hold an open connection between calls and does not implement `IDisposable`. It does not require a `using` block or a shutdown flush.
 
-The current API provides no deletion method or automatic retention policy. Deleting log rows remains a separate database operation.
+There is no automatic retention policy. Call `DeleteFromLog` explicitly when cleanup is required.
 
 ## Related topics
 
