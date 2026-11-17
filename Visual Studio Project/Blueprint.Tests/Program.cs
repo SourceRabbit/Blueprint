@@ -1,0 +1,83 @@
+using Blueprint.Tests.Tutorial1;
+
+namespace Blueprint.Tests
+{
+    /// <summary>Creates and runs Blueprint tests through the shared RunTest method.</summary>
+    internal static class Program
+    {
+        /// <summary>Runs isolated SQL command, log, or RAM cache checks, or the configured performance test.</summary>
+        /// <param name="args">Use --sql-execute-non-query for standalone SQL commands, --sql-log for logging, --ram-cache-auto-include for cached relationships, or --ram-cache-change-tracking for SQL/RAM synchronization; otherwise run the configured performance test.</param>
+        /// <returns>Zero on success or one on failure.</returns>
+        private static int Main(string[] args)
+        {
+            if (args.Contains("--sql-execute-non-query"))
+            {
+                Sql.ExecuteNonQueryTest commandTest = new Sql.ExecuteNonQueryTest();
+                commandTest.RunTest();
+                return 0;
+            }
+
+            if (args.Contains("--sql-log"))
+            {
+                Log.SqlLogTest logTest = new Log.SqlLogTest();
+                logTest.RunTest();
+                return 0;
+            }
+
+            if (args.Contains("--ram-cache-auto-include"))
+            {
+                RAMCache.AutoIncludeTest autoIncludeTest = new RAMCache.AutoIncludeTest();
+                autoIncludeTest.RunTest();
+                return 0;
+            }
+            if (args.Contains("--ram-cache-change-tracking"))
+            {
+                RAMCache.ChangeTrackingTest changeTrackingTest = new RAMCache.ChangeTrackingTest();
+                changeTrackingTest.RunTest();
+                return 0;
+            }
+
+            Performance.RAMCachePerformanceTest performanceTest = new Performance.RAMCachePerformanceTest();
+            performanceTest.RunTest();
+
+
+            /*
+                Queries.QueryExecutorTest queryExecutorTest = new Queries.QueryExecutorTest();
+                queryExecutorTest.RunTest();
+            */
+
+            /*
+                Localization.MultilingualFallbackTest fallbackTest = new Localization.MultilingualFallbackTest();
+                fallbackTest.RunTest();
+            */
+
+
+            /*
+          
+                Lifecycle.LifecycleTest lifecycleTest = new Lifecycle.LifecycleTest(args.Contains("--lifecycle-sql"));
+                lifecycleTest.RunTest();
+                return 0;
+            */
+
+
+
+            /*
+            PerformanceTest.PerformanceTest performanceTest = new PerformanceTest.PerformanceTest();
+            performanceTest.RunTest();
+            */
+
+
+            /*
+            EntitiesTutorial tutorial = new EntitiesTutorial();
+            tutorial.RunTest();
+            Console.WriteLine("Press Enter to exit.");
+            Console.ReadLine();
+            */
+            return 0;
+
+
+
+        }
+
+    }
+}

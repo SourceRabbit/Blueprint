@@ -1,0 +1,102 @@
+# Relationships
+
+Relationships connect entity contracts through their IDs. Define a scalar foreign key and a reference property; add an inverse collection when the application needs it.
+
+## Define a brand and its products
+
+This example uses a simplified version of the [Product contract](Database-Tutorial-EShop-Checkout.md#define-a-contract) with an additional brand relationship. Keep one `Product` definition in your application.
+
+```csharp
+using Blueprint.Database.Entities.Annotations;
+using Blueprint.Database.Entities;
+using Microsoft.EntityFrameworkCore;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace BlueprintManual
+{
+    /// <summary>Describes a brand and its related products.</summary>
+    [Entity("Brands")]
+    public interface Brand : BlueprintEntity
+    {
+        [MaxLength(200)]
+        string Name { get; set; }
+
+        [InverseProperty(nameof(Product.Brand))]
+        ICollection<Product> Products { get; set; }
+    }
+
+    /// <summary>Describes a product with an optional brand.</summary>
+    [Entity("Products")]
+    [EntityIndex("UX_Products_SKU", nameof(SKU), IsUnique = true)]
+    public interface Product : BlueprintEntity
+    {
+        [MaxLength(64)]
+        string SKU { get; set; }
+
+        [Multilingual, MaxLength(200)]
+        string? Title { get; set; }
+
+        [Precision(18, 2)]
+        decimal Price { get; set; }
+
+        long? BrandID { get; set; }
+
+        [ForeignKey(nameof(BrandID)), AutoInclude]
+        Brand? Brand { get; set; }
+    }
+}
+```
+
+`BrandID` is nullable because the relationship is optional. For a required relationship, use `long` and a non-nullable reference. `[ForeignKey]` names properties on the dependent entity. Without it, the expected key name is the reference property name followed by `ID`.
+
+Register `Product`; Blueprint discovers its related `Brand` contract. Explicitly registering both is also supported.
+
+## Load related data
+
+```csharp
+Product? product = Product.SingleOrDefault(item => item.ID == productID);
+Console.WriteLine(product?.Brand?.Name);
+```
+
+`AutoInclude` on `Product.Brand` loads the reference when the product is materialized. An inverse collection defines the relationship; it does not by itself request automatic loading. Add `AutoInclude` only to navigations that you need automatically, avoiding cycles and unnecessarily large object graphs.
+
+Relationship queries and automatic includes use SQL when RAM caching cannot satisfy them. The query's selected language also applies to materialized related entities. Relationships themselves always use the same ID across languages.
+
+## Insert a parent and child together
+
+The transaction keeps operation order. Insert the new parent first and assign its instance to the child's mapped navigation:
+
+```csharp
+using Blueprint.Database.TransactionFactory;
+
+Brand brand = Brand.Create();
+brand.Name = "Example Brand";
+
+Product product = Product.Create();
+product.SKU = "CAMERA-BRAND-001";
+product.Title = "Camera";
+product.Price = 120m;
+product.Brand = brand;
+
+DatabaseTransaction transaction = database.TransactionFactory.CreateNewTransaction();
+transaction.AddInsert(brand);
+transaction.AddInsert(product);
+await database.TransactionFactory.ExecuteTransactionAsync(transaction);
+Console.WriteLine($"Brand: {brand.ID}, product foreign key: {product.BrandID}");
+```
+
+Blueprint assigns the parent's generated ID to the child's foreign key before inserting the child. The parent must already exist or be inserted earlier in this transaction. A conflicting foreign-key value and navigation reference are rejected.
+
+For an existing parent, you can set the scalar foreign key to its ID. Merely adding an object to `brand.Products` does not save it: enqueue or save each changed entity explicitly.
+
+## Updates and deletes
+
+Updating a product does not automatically update its brand or the entire navigation graph. Register each intended change as a separate operation.
+
+Relationships use restricted delete behavior. Remove or reassign dependent rows before deleting a referenced parent. In a transaction, add child deletes before the parent delete. A foreign-key failure rolls back the transaction.
+
+## Related topics
+
+[Data Annotations](Database-Entities-Annotations.md) · [Queries and CRUD](Database-Queries-and-CRUD.md) · [Transactions](Database-Transactions.md) · [Multilingual Entities](Database-Multilingual-Entities.md)
