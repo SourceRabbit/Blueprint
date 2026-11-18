@@ -47,9 +47,9 @@ namespace Blueprint.Tests.Lifecycle
         /// <exception cref="Exception">Αποτυγχάνει έλεγχος κύκλου ζωής.</exception>
         private void CheckDatabaseLifecycle()
         {
-            Assert(typeof(BlueprintDatabase).GetProperty("ACTIVE_INSTANCE", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null) == null, "The active instance must be null before construction.");
+            Assert(BlueprintDatabase.ACTIVE_INSTANCE == null, "The active instance must be null before construction.");
             AssertThrows<InvalidOperationException>(() => new ModelDatabase(CreateLanguages(), true), "Failed initialization must propagate its error.");
-            Assert(typeof(BlueprintDatabase).GetProperty("ACTIVE_INSTANCE", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null) == null, "Failed initialization must clear the active instance.");
+            Assert(BlueprintDatabase.ACTIVE_INSTANCE == null, "Failed initialization must clear the active instance.");
             List<BlueprintLanguage> languages = CreateLanguages();
             ModelDatabase previousDatabase;
             IQueryable<LifecycleRecord> previousQuery;
@@ -81,7 +81,7 @@ namespace Blueprint.Tests.Lifecycle
                     Assert(LifecycleRecord.Create().CurrentLanguage == 7, "Stopping an independent manager must not dispose the database.");
                 }
             }
-            Assert(typeof(BlueprintDatabase).GetProperty("ACTIVE_INSTANCE", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null) == null, "Disposal must clear the active instance.");
+            Assert(BlueprintDatabase.ACTIVE_INSTANCE == null, "Disposal must clear the active instance.");
             AssertThrows<NullReferenceException>(() => previousQuery.ToList(), "Deferred queries must reject a missing active database.");
             using (ModelDatabase database = new ModelDatabase(CreateLanguages()))
             {
@@ -190,7 +190,7 @@ namespace Blueprint.Tests.Lifecycle
             IDisposable cache;
             using (ModelDatabase database = new ModelDatabase(CreateLanguages()))
             {
-                object context = typeof(BlueprintDatabase).GetProperty("Context", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(database)!;
+                BlueprintDatabaseContext context = BlueprintDatabase.ACTIVE_INSTANCE.Context;
                 using (cache = (IDisposable)Activator.CreateInstance(cacheType, BindingFlags.Instance | BindingFlags.NonPublic, null, new object[] { context, TimeSpan.FromHours(1) }, null)!)
                 {
                     refresh.Invoke(cache, new object?[] { null });
@@ -199,7 +199,7 @@ namespace Blueprint.Tests.Lifecycle
                 Assert(database.TransactionFactory.CreateNewTransaction() != null, "A callback from a disposed cache must preserve the active database.");
             }
             refresh.Invoke(cache, new object?[] { null });
-            Assert(typeof(BlueprintDatabase).GetProperty("ACTIVE_INSTANCE", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null) == null, "A callback after database disposal must leave the active instance empty.");
+            Assert(BlueprintDatabase.ACTIVE_INSTANCE == null, "A callback after database disposal must leave the active instance empty.");
         }
 
         /// <summary>Επαληθεύει ότι η ταυτόχρονη αρχικοποίηση ενεργοποιεί ακριβώς μία βάση.</summary>
@@ -392,7 +392,7 @@ namespace Blueprint.Tests.Lifecycle
                 fFailInitialization = failInitialization;
                 try
                 {
-                    object? activeDatabase = typeof(BlueprintDatabase).GetProperty("ACTIVE_INSTANCE", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null);
+                    BlueprintDatabase? activeDatabase = BlueprintDatabase.ACTIVE_INSTANCE;
                     if (!ReferenceEquals(activeDatabase, this))
                     {
                         throw new InvalidOperationException("The base constructor must activate this instance before provider initialization.");

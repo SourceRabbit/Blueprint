@@ -17,7 +17,7 @@ using Blueprint.Fundamentals;
 namespace Blueprint.Database
 {
     /// <summary>Maps generated subclasses and entity attributes to the EF Core model.</summary>
-    internal sealed class BlueprintDatabaseContext : DbContext
+    public sealed class BlueprintDatabaseContext : DbContext
     {
         private static readonly MethodInfo fQueryMethod = typeof(BlueprintDatabaseContext).GetMethod(nameof(CreateQuery), BindingFlags.NonPublic | BindingFlags.Instance)!;
         private static readonly EntityMaterializer fMaterializer = new();

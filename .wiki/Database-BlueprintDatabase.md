@@ -25,11 +25,24 @@ The database name, connection settings, and language configuration are read-only
 
 | Property | Purpose |
 | --- | --- |
+| [ACTIVE_INSTANCE and Context](#active_instance-and-context) | Gets the active database and its shared EF Core context. |
 | [Name](#name) | Gets the configured database name. |
 | [ConnectionString](#connectionstring) | Gets the connection settings stored by the provider. |
 | [Languages](#languages) | Gets the independent, read-only language configuration. |
 | [TransactionFactory](#transactionfactory) | Gets this database instance's factory for creating and executing transactions. |
 | [RAMCacheRefreshInterval](#ramcacherefreshinterval) | Gets or sets the polling interval for external changes to cached data. |
+
+### ACTIVE_INSTANCE and Context
+
+After provider initialization completes, applications can access the public context through the active instance:
+
+```csharp
+BlueprintDatabaseContext context = BlueprintDatabase.ACTIVE_INSTANCE.Context;
+```
+
+`ACTIVE_INSTANCE` returns the instance registered by the base constructor without checking for null. Access it only after initialization and before disposal. `Context` is read-only and throws if the database has been disposed or its context has not been initialized.
+
+The context is shared and owned by Blueprint. Do not dispose it separately. Direct EF Core operations must not overlap other operations on the context, including Blueprint queries, transactions, cache refreshes, or database disposal. The property's getter lock protects only retrieval, not subsequent use of the returned context.
 
 ### Name
 

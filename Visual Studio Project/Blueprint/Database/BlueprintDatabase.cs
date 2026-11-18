@@ -290,7 +290,7 @@ namespace Blueprint.Database
 
         /// <summary>The database registered by the base constructor, shared by static Entity API calls after provider initialization completes.</summary>
         /// <remarks>Callers must complete initialization before use and stop before disposal. No runtime null check is performed.</remarks>
-        internal static BlueprintDatabase ACTIVE_INSTANCE
+        public static BlueprintDatabase ACTIVE_INSTANCE
         {
             get
             {
@@ -370,8 +370,11 @@ namespace Blueprint.Database
             }
         }
 
-        /// <summary>The successfully initialized context.</summary>
-        internal BlueprintDatabaseContext Context
+        /// <summary>The successfully initialized context owned by this database.</summary>
+        /// <remarks>Direct use must not overlap other context operations or database disposal. The getter does not hold the database lock after returning. Callers must not dispose this shared context.</remarks>
+        /// <exception cref="ObjectDisposedException">The database has been disposed.</exception>
+        /// <exception cref="InvalidOperationException">The database has not been initialized.</exception>
+        public BlueprintDatabaseContext Context
         {
             get
             {
