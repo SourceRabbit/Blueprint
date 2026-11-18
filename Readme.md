@@ -6,7 +6,7 @@ Blueprint is a backend application framework for .NET, **designed to provide a s
 
 Database access follows this approach through `BlueprintDatabase`: applications select a database provider during initialization while keeping the same API for entities, queries, and transactions. Microsoft SQL Server is currently supported, with MySQL support planned.
 
-Visit the [Blueprint Wiki](https://github.com/SourceRabbit/Blueprint/wiki) for setup instructions, documentation, and examples.
+See the [Blueprint documentation](https://github.com/SourceRabbit/Blueprint/tree/main/.wiki) for setup instructions, API details, and examples.
 
 <br clear="left">
 
@@ -82,4 +82,4 @@ The [complete checkout example](.wiki/Database-EShopCheckoutTutorial.md#complete
 
 ## Documentation
 
-The English consumer manual is maintained in the [`.wiki` directory](.wiki/README.md) and published to the [GitHub Wiki](https://github.com/SourceRabbit/Blueprint/wiki). The `Sync Wiki` workflow publishes documentation changes pushed to `main`. It covers usage, examples, behavior, and limitations of the public API. For common errors, see [Troubleshooting](.wiki/Troubleshooting.md).
+The English consumer manual is maintained in the [`.wiki` directory](https://github.com/SourceRabbit/Blueprint/tree/main/.wiki) and published to the [GitHub Wiki](https://github.com/SourceRabbit/Blueprint/wiki). The `Sync Wiki` workflow publishes documentation changes pushed to `main`. It covers usage, examples, behavior, and limitations of the public API. For common errors, see [Troubleshooting](.wiki/Troubleshooting.md).

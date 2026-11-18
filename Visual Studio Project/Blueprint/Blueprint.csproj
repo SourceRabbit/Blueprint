@@ -6,6 +6,7 @@
     <PackageId>SourceRabbit.Blueprint</PackageId>
     <Authors>SourceRabbit</Authors>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>Readme.md</PackageReadmeFile>
     <Description>Backend application framework for .NET with entity mapping, SQL Server persistence, RAM caching, and background tasks.</Description>
     <PackageProjectUrl>https://github.com/SourceRabbit/Blueprint</PackageProjectUrl>
     <RepositoryUrl>https://github.com/SourceRabbit/Blueprint</RepositoryUrl>
@@ -16,6 +17,7 @@
 
   <ItemGroup>
     <None Include="../../LICENSE" Pack="true" PackagePath="/" />
+    <None Include="../../Readme.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 
   <ItemGroup>
