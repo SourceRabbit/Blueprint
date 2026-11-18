@@ -11,15 +11,12 @@ namespace Blueprint.Database.Sql
     /// <typeparam name="TEntity">The registered entity class.</typeparam>
     internal sealed class BlueprintEntityCommands<TEntity> where TEntity : BlueprintEntity
     {
-        private readonly BlueprintDatabase fDatabase;
         private readonly long fLanguage;
 
         /// <summary>Binds write operations to a validated entity type and language.</summary>
-        /// <param name="database">The database that owns the context and cache.</param>
         /// <param name="language">The language used by predicate deletes.</param>
-        internal BlueprintEntityCommands(BlueprintDatabase database, long language)
+        internal BlueprintEntityCommands(long language)
         {
-            fDatabase = database;
             fLanguage = language;
         }
 
@@ -40,7 +37,8 @@ namespace Blueprint.Database.Sql
         public int Insert(IEnumerable<TEntity> entities)
         {
             ArgumentNullException.ThrowIfNull(entities);
-            return fDatabase.ExecuteOperation(context =>
+            BlueprintDatabase database = BlueprintDatabase.ACTIVE_INSTANCE;
+            return database.ExecuteOperation(context =>
             {
                 List<TEntity> items = ValidateEntities(context, entities);
                 if (items.Any(entity => entity.ID != 0))
@@ -58,7 +56,7 @@ namespace Blueprint.Database.Sql
                 finally
                 {
                     context.ChangeTracker.Clear();
-                    fDatabase.InvalidateCache();
+                    database.InvalidateCache();
                 }
             });
         }
@@ -79,7 +77,8 @@ namespace Blueprint.Database.Sql
         public int Update(IEnumerable<TEntity> entities)
         {
             ArgumentNullException.ThrowIfNull(entities);
-            return fDatabase.ExecuteOperation(context =>
+            BlueprintDatabase database = BlueprintDatabase.ACTIVE_INSTANCE;
+            return database.ExecuteOperation(context =>
             {
                 List<TEntity> items = ValidateEntities(context, entities);
                 Type concreteType = BlueprintDatabase.ResolveType<TEntity>(context);
@@ -117,7 +116,7 @@ namespace Blueprint.Database.Sql
                 finally
                 {
                     context.ChangeTracker.Clear();
-                    fDatabase.InvalidateCache();
+                    database.InvalidateCache();
                 }
             });
         }
@@ -128,7 +127,8 @@ namespace Blueprint.Database.Sql
         public int Delete(Expression<Func<TEntity, bool>> predicate)
         {
             ArgumentNullException.ThrowIfNull(predicate);
-            return fDatabase.ExecuteOperation(context =>
+            BlueprintDatabase database = BlueprintDatabase.ACTIVE_INSTANCE;
+            return database.ExecuteOperation(context =>
             {
                 _ = context.EntityTypes.getLanguage(fLanguage);
                 Expression translated = new MultilingualQuery(fLanguage, context.EntityTypes.DefaultLanguageID).Visit(predicate)!;
@@ -139,7 +139,7 @@ namespace Blueprint.Database.Sql
                 }
                 finally
                 {
-                    fDatabase.InvalidateCache();
+                    database.InvalidateCache();
                 }
             });
         }

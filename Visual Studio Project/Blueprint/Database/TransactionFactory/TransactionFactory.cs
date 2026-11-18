@@ -11,31 +11,22 @@ namespace Blueprint.Database.TransactionFactory
     /// <remarks>Each BlueprintDatabase owns an instance. The factory uses the same lock as queries, CRUD, and database disposal.</remarks>
     public sealed class TransactionFactory
     {
-        private readonly BlueprintDatabase fDatabase;
-        private readonly object fSyncRoot;
-
-        /// <summary>Connects the factory to the database and synchronization object protecting its context.</summary>
-        /// <param name="database">The database that owns the factory and its transactions.</param>
-        /// <param name="syncRoot">The shared database lock.</param>
-        /// <exception cref="ArgumentNullException">No database or synchronization object was provided.</exception>
-        internal TransactionFactory(BlueprintDatabase database, object syncRoot)
+        /// <summary>Creates a factory that resolves the active database when an operation is requested.</summary>
+        internal TransactionFactory()
         {
-            ArgumentNullException.ThrowIfNull(database);
-            ArgumentNullException.ThrowIfNull(syncRoot);
-            fDatabase = database;
-            fSyncRoot = syncRoot;
         }
 
-        /// <summary>Creates an empty operation transaction owned by this database instance.</summary>
+        /// <summary>Creates an empty operation transaction after validating the active database.</summary>
         /// <returns>The transaction in which the caller registers inserts, updates, and deletes.</returns>
         /// <exception cref="ObjectDisposedException">The database has been disposed.</exception>
         /// <exception cref="InvalidOperationException">The database context has not been initialized.</exception>
         public DatabaseTransaction CreateNewTransaction()
         {
-            lock (fSyncRoot)
+            BlueprintDatabase database = BlueprintDatabase.ACTIVE_INSTANCE;
+            lock (database.SyncRoot)
             {
-                _ = fDatabase.Context;
-                return new DatabaseTransaction(fDatabase);
+                _ = database.Context;
+                return new DatabaseTransaction();
             }
         }
 
@@ -50,10 +41,11 @@ namespace Blueprint.Database.TransactionFactory
         public DatabaseTransaction CreateNewTransaction(Action<DatabaseTransaction> prepare)
         {
             ArgumentNullException.ThrowIfNull(prepare);
-            lock (fSyncRoot)
+            BlueprintDatabase database = BlueprintDatabase.ACTIVE_INSTANCE;
+            lock (database.SyncRoot)
             {
-                _ = fDatabase.Context;
-                return new DatabaseTransaction(fDatabase, prepare);
+                _ = database.Context;
+                return new DatabaseTransaction(prepare);
             }
         }
 
@@ -71,7 +63,7 @@ namespace Blueprint.Database.TransactionFactory
         /// </remarks>
         /// <exception cref="ArgumentNullException">No transaction was provided.</exception>
         /// <exception cref="ArgumentException">An entity does not belong to the model or has an ID incompatible with the operation.</exception>
-        /// <exception cref="InvalidOperationException">The transaction has already been submitted, belongs to another database, or an external transaction exists.</exception>
+        /// <exception cref="InvalidOperationException">No database is active, the transaction has already been submitted, or an existing operation or external transaction prevents execution.</exception>
         /// <exception cref="ObjectDisposedException">The database was disposed before execution.</exception>
         /// <exception cref="OperationCanceledException">Cancellation was requested before commit was confirmed.</exception>
         /// <exception cref="DbUpdateException">A write or concurrency check failed.</exception>
@@ -81,20 +73,21 @@ namespace Blueprint.Database.TransactionFactory
         public Task<int> ExecuteTransactionAsync(DatabaseTransaction transaction, IsolationLevel isolationLevel = IsolationLevel.ReadCommitted, CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(transaction);
-            if (Monitor.IsEntered(fSyncRoot) || System.Transactions.Transaction.Current != null)
+            BlueprintDatabase database = BlueprintDatabase.ACTIVE_INSTANCE;
+            if (Monitor.IsEntered(database.SyncRoot) || System.Transactions.Transaction.Current != null)
             {
                 throw new InvalidOperationException("Submit a database transaction outside an existing database operation or TransactionScope.");
             }
-            transaction.BeginExecution(fDatabase);
+            transaction.BeginExecution();
             return Task.Run(() =>
             {
                 bool isCommitted = false;
                 try
                 {
-                    lock (fSyncRoot)
+                    lock (database.SyncRoot)
                     {
                         cancellationToken.ThrowIfCancellationRequested();
-                        BlueprintDatabaseContext context = fDatabase.Context;
+                        BlueprintDatabaseContext context = database.Context;
                         if (context.Database.CurrentTransaction != null)
                         {
                             throw new InvalidOperationException("The database already has an active transaction.");
@@ -130,7 +123,7 @@ namespace Blueprint.Database.TransactionFactory
                         finally
                         {
                             context.ChangeTracker.Clear();
-                            fDatabase.InvalidateCache();
+                            database.InvalidateCache();
                         }
                     }
                 }

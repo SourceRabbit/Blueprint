@@ -13,12 +13,11 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
         private readonly QueryExecutor_Database fDatabaseExecutor;
 
         /// <summary>Connects the executor to the entity's cache and original provider.</summary>
-        /// <param name="database">The database that manages the cache.</param>
         /// <param name="contract">The original query's entity class.</param>
         /// <param name="provider">The provider that owns the query.</param>
         /// <param name="language">The language ID used by filters and results.</param>
         /// <param name="databaseExecutor">The SQL executor used for transactions and unsupported cache queries.</param>
-        internal QueryExecutor_RAM(BlueprintDatabase database, Type contract, IQueryProvider provider, long language, QueryExecutor_Database databaseExecutor) : base(database, contract, provider, language)
+        internal QueryExecutor_RAM(Type contract, IQueryProvider provider, long language, QueryExecutor_Database databaseExecutor) : base(contract, provider, language)
         {
             fDatabaseExecutor = databaseExecutor;
         }
@@ -89,12 +88,12 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
         /// <exception cref="Exception">Cache synchronization or SQL execution fails.</exception>
         internal override List<BlueprintEntity> ReadRelated(BlueprintDatabaseContext context, IProperty key, long[] ids)
         {
-            RAMCachedTable? table = fDatabase.GetCachedTable(fContract);
+            RAMCachedTable? table = BlueprintDatabase.ACTIVE_INSTANCE.GetCachedTable(fContract);
             if (table == null)
             {
                 return fDatabaseExecutor.ReadRelated(context, key, ids);
             }
-            fDatabase.SynchronizeCache();
+            BlueprintDatabase.ACTIVE_INSTANCE.SynchronizeCache();
             return table.GetRelatedRows(key, ids).Select(row => table.Copy(row, fLanguage)).ToList();
         }
 
@@ -105,12 +104,12 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
         /// <exception cref="Exception">Required cache synchronization fails.</exception>
         private RAMCachedTable? GetTable(Expression expression, bool includeRelated)
         {
-            RAMCachedTable? table = fDatabase.GetCachedTable(fContract);
+            RAMCachedTable? table = BlueprintDatabase.ACTIVE_INSTANCE.GetCachedTable(fContract);
             if (table == null || !CachedQueryEligibility.CanExecute(fContract, expression, fProvider, includeRelated))
             {
                 return null;
             }
-            fDatabase.SynchronizeCache();
+            BlueprintDatabase.ACTIVE_INSTANCE.SynchronizeCache();
             return table;
         }
 
@@ -249,7 +248,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
             element = stored == null ? null : table.Copy(stored, fLanguage);
             if (element is BlueprintEntity entity)
             {
-                EntityIncludes.Load(fDatabase, context, new[] { entity }, fLanguage);
+                EntityIncludes.Load(context, new[] { entity }, fLanguage);
             }
             return true;
         }
@@ -274,7 +273,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
                 results.Add((TElement)(object)table.Copy(stored, fLanguage));
             }
             items = results;
-            EntityIncludes.Load(fDatabase, context, results.OfType<BlueprintEntity>(), fLanguage);
+            EntityIncludes.Load(context, results.OfType<BlueprintEntity>(), fLanguage);
             return true;
         }
 
@@ -387,7 +386,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
             {
                 entities.SetValue(table.Copy(stored, fLanguage), index++);
             }
-            EntityIncludes.Load(fDatabase, context, entities.Cast<BlueprintEntity>(), fLanguage);
+            EntityIncludes.Load(context, entities.Cast<BlueprintEntity>(), fLanguage);
             return ((IEnumerable)entities).AsQueryable();
         }
 

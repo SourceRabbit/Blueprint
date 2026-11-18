@@ -178,7 +178,7 @@ namespace Blueprint.Database.Sql
                         SqlChangeTracking.InitializeDatabase(context);
                         SqlSchemaInitializer.Initialize(context);
                         BlueprintDatabaseContext entityContext = (BlueprintDatabaseContext)context;
-                        cache = entityContext.EntityTypes.Types.Keys.Any(contract => typeof(BlueprintEntityRAM).IsAssignableFrom(contract)) ? new SqlEntityCache(this, entityContext, RAMCacheRefreshInterval) : null;
+                        cache = entityContext.EntityTypes.Types.Keys.Any(contract => typeof(BlueprintEntityRAM).IsAssignableFrom(contract)) ? new SqlEntityCache(entityContext, RAMCacheRefreshInterval) : null;
                     });
                 }
                 catch
@@ -188,6 +188,7 @@ namespace Blueprint.Database.Sql
                 }
                 fRAMCache?.Dispose();
                 fRAMCache = cache;
+                fRAMCache?.Start();
             }
         }
 

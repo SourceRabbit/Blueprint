@@ -72,6 +72,24 @@ This rule concerns resource disposal. Namespace imports such as `using Blueprint
 
 Use descriptive names. The `f` prefix is reserved for class fields; never apply it to local variables, parameters, or temporary values. Constants follow their own UPPER_SNAKE_CASE rule.
 
+## Volatile fields and thread synchronization
+
+**When a field needs volatile read/write semantics and C# supports `volatile` for its type, declare the field with the `volatile` modifier. Use direct reads and writes instead of `Volatile.Read` or `Volatile.Write` for that field.** This makes the synchronization requirement visible at the declaration.
+
+For example:
+
+```csharp
+private static volatile BlueprintDatabase? fActiveInstance;
+```
+
+Keep `Interlocked` operations where atomic updates are required, such as publishing the active database only when the field is null or clearing it only when it still refers to the disposing instance. Do not replace compare-and-exchange with a separate check and assignment.
+
+Passing a volatile field by `ref` can produce warning `CS0420`. For an `Interlocked` operation that supplies the required synchronization itself, suppress only `CS0420` immediately around that call with `#pragma warning disable CS0420` and `#pragma warning restore CS0420`, and explain why in a nearby comment. Do not disable the warning project-wide or suppress it for arbitrary methods receiving the field by reference.
+
+Use `Volatile.Read` or `Volatile.Write` only when the declaration cannot carry the modifier, such as an array element or a supported API operand whose type cannot be declared `volatile` in C#. Document the reason when introducing such a use.
+
+`volatile` does not make compound operations atomic, protect the referenced object's mutable state, or prevent disposal after a reference is read. Retain the locks and lifetime checks required by shared contexts, transactions, caches, and disposal. Fields whose accesses are already consistently protected by a lock do not need `volatile` solely because multiple threads use them.
+
 ## Class member order
 
 Arrange members in this order:

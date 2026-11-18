@@ -4,10 +4,12 @@ using Blueprint.Entities.Annotations;
 using Blueprint.Entities;
 using Blueprint.Database;
 using Blueprint.Database.Sql;
+using Blueprint.Database.TransactionFactory;
 using Blueprint.Fundamentals;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using System.Data.Common;
+using System.Reflection;
 
 namespace Blueprint.Tests.Lifecycle
 {
@@ -30,6 +32,9 @@ namespace Blueprint.Tests.Lifecycle
             ResetAssertions();
             CheckDatabaseLifecycle();
             CheckConcurrentActivation();
+            CheckTransactionLifecycle();
+            CheckDatabaseDisposal();
+            CheckCacheCallbacks();
             CheckBackgroundManager();
             if (fUseSql)
             {
@@ -77,13 +82,124 @@ namespace Blueprint.Tests.Lifecycle
                 }
             }
             AssertThrows<InvalidOperationException>(() => LifecycleRecord.Create(), "Disposal must clear the active database.");
-            AssertThrows<ObjectDisposedException>(() => previousQuery.ToList(), "Deferred queries must retain their disposed original database.");
+            AssertThrows<InvalidOperationException>(() => previousQuery.ToList(), "Deferred queries must reject a missing active database.");
             using (ModelDatabase database = new ModelDatabase(CreateLanguages()))
             {
                 database.RegisterEntity<LifecycleRecord>();
                 previousDatabase.Dispose();
                 Assert(LifecycleRecord.Create().CurrentLanguage == 7, "Repeated disposal must not clear a replacement database.");
             }
+        }
+
+        /// <summary>Ελέγχει το κοινό lock, την ακύρωση και τη μοναδική υποβολή των transactions χωρίς σύνδεση SQL.</summary>
+        /// <exception cref="Exception">Αποτυγχάνει έλεγχος ασφάλειας transaction.</exception>
+        private void CheckTransactionLifecycle()
+        {
+            TransactionFactory factory;
+            using (ModelDatabase database = new ModelDatabase(CreateLanguages()))
+            {
+                factory = database.TransactionFactory;
+                DatabaseTransaction transaction = factory.CreateNewTransaction();
+                DatabaseTransaction prepared = factory.CreateNewTransaction(pending => throw new InvalidOperationException("Cancelled preparation must not run."));
+                database.RunUnderLock(() =>
+                {
+                    AssertThrows<InvalidOperationException>(() => factory.ExecuteTransactionAsync(transaction), "Submitting from inside a database operation must fail before reserving the transaction.");
+                    AssertThrows<InvalidOperationException>(() => database.Dispose(), "Disposal from inside an operation must not close its context.");
+                });
+                using (System.Transactions.TransactionScope scope = new System.Transactions.TransactionScope())
+                {
+                    AssertThrows<InvalidOperationException>(() => factory.ExecuteTransactionAsync(transaction), "Submitting inside an ambient transaction must fail before reserving the transaction.");
+                }
+                AssertThrows<OperationCanceledException>(() => factory.ExecuteTransactionAsync(transaction, cancellationToken: new CancellationToken(true)).GetAwaiter().GetResult(), "Cancellation must run without opening SQL or executing the transaction.");
+                Assert(transaction.IsCompleted && !transaction.IsCommitted, "Cancelled transactions must be completed without a commit.");
+                AssertThrows<InvalidOperationException>(() => factory.ExecuteTransactionAsync(transaction), "A transaction must not be submitted twice, even after cancellation.");
+                AssertThrows<InvalidOperationException>(() => transaction.AddValidation(database.Dispose), "Submitted transactions must reject further operations.");
+                AssertThrows<OperationCanceledException>(() => factory.ExecuteTransactionAsync(prepared, cancellationToken: new CancellationToken(true)).GetAwaiter().GetResult(), "Cancellation must prevent the preparation callback from running.");
+                Assert(prepared.IsCompleted && !prepared.IsCommitted, "Cancelled prepared transactions must publish their completion.");
+                AssertThrows<ArgumentNullException>(() => factory.CreateNewTransaction(null!), "Preparation requires a non-null callback.");
+                using (ManualResetEventSlim submitted = new ManualResetEventSlim())
+                {
+                    DatabaseTransaction queued = factory.CreateNewTransaction();
+                    Task<int>? execution = null;
+                    Task? submission = null;
+                    database.RunUnderLock(() =>
+                    {
+                        submission = Task.Run(() =>
+                        {
+                            execution = factory.ExecuteTransactionAsync(queued, cancellationToken: new CancellationToken(true));
+                            submitted.Set();
+                        });
+                        Assert(submitted.Wait(TimeSpan.FromSeconds(5)), "Transaction submission must reach the worker queue.");
+                        Assert(!SpinWait.SpinUntil(() => execution!.IsCompleted, TimeSpan.FromMilliseconds(100)), "The transaction worker must wait for the database lock, even before handling cancellation.");
+                    });
+                    Assert(submission!.Wait(TimeSpan.FromSeconds(5)), "Transaction submission must finish.");
+                    Assert(SpinWait.SpinUntil(() => execution!.IsCompleted, TimeSpan.FromSeconds(5)), "The transaction worker must finish after the database lock is released.");
+                    AssertThrows<OperationCanceledException>(() => execution!.GetAwaiter().GetResult(), "The queued transaction must observe cancellation after acquiring the lock.");
+                    Assert(queued.IsCompleted && !queued.IsCommitted, "The queued cancelled transaction must publish its completion.");
+                }
+            }
+            AssertThrows<InvalidOperationException>(() => factory.CreateNewTransaction(), "The factory must reject a missing active database after disposal.");
+            AssertThrows<InvalidOperationException>(() => factory.ExecuteTransactionAsync(new DatabaseTransaction()), "Submitting after disposal must reject a missing active database.");
+        }
+
+        /// <summary>Ελέγχει ότι το disposal περιμένει το κοινό lock και ότι οι επόμενες λειτουργίες απορρίπτονται.</summary>
+        /// <exception cref="Exception">Αποτυγχάνει ο συγχρονισμός ή έλεγχος αποδέσμευσης.</exception>
+        private void CheckDatabaseDisposal()
+        {
+            using (ModelDatabase database = new ModelDatabase(CreateLanguages()))
+            using (ManualResetEventSlim entered = new ManualResetEventSlim())
+            using (ManualResetEventSlim release = new ManualResetEventSlim())
+            using (ManualResetEventSlim disposalStarted = new ManualResetEventSlim())
+            {
+                Task operation = Task.Run(() => database.RunUnderLock(() =>
+                {
+                    entered.Set();
+                    if (!release.Wait(TimeSpan.FromSeconds(10)))
+                    {
+                        throw new TimeoutException("The test did not release the database operation.");
+                    }
+                }));
+                Task? disposal = null;
+                try
+                {
+                    Assert(entered.Wait(TimeSpan.FromSeconds(5)), "The database operation must acquire the lock.");
+                    disposal = Task.Run(() =>
+                    {
+                        disposalStarted.Set();
+                        database.Dispose();
+                    });
+                    Assert(disposalStarted.Wait(TimeSpan.FromSeconds(5)), "Database disposal must start.");
+                    Assert(!disposal.Wait(TimeSpan.FromMilliseconds(100)), "Database disposal must wait for operations holding its lock.");
+                }
+                finally
+                {
+                    release.Set();
+                    Assert(operation.Wait(TimeSpan.FromSeconds(5)), "The database operation must finish after release.");
+                    Assert(disposal == null || disposal.Wait(TimeSpan.FromSeconds(5)), "Database disposal must finish after release.");
+                }
+                AssertThrows<InvalidOperationException>(() => database.TransactionFactory.CreateNewTransaction(), "Disposed databases must leave no active instance for transactions.");
+            }
+        }
+
+        /// <summary>Προσομοιώνει καθυστερημένα callbacks άδειας RAM cache πριν και μετά το disposal, χωρίς πρόσβαση σε SQL.</summary>
+        /// <exception cref="Exception">Αποτυγχάνει η κατασκευή της cache ή κάποιο callback.</exception>
+        private void CheckCacheCallbacks()
+        {
+            Type cacheType = typeof(BlueprintDatabase).Assembly.GetType("Blueprint.Database.Sql.RAMCache.SqlEntityCache", true)!;
+            MethodInfo refresh = cacheType.GetMethod("RefreshInBackground", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            IDisposable cache;
+            using (ModelDatabase database = new ModelDatabase(CreateLanguages()))
+            {
+                object context = typeof(BlueprintDatabase).GetProperty("Context", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(database)!;
+                using (cache = (IDisposable)Activator.CreateInstance(cacheType, BindingFlags.Instance | BindingFlags.NonPublic, null, new object[] { context, TimeSpan.FromHours(1) }, null)!)
+                {
+                    refresh.Invoke(cache, new object?[] { null });
+                }
+                refresh.Invoke(cache, new object?[] { null });
+                Assert(database.TransactionFactory.CreateNewTransaction() != null, "A callback from a disposed cache must preserve the active database.");
+            }
+            refresh.Invoke(cache, new object?[] { null });
+            AssertThrows<InvalidOperationException>(() => LifecycleRecord.Create(), "A callback after database disposal must leave the active instance empty.");
         }
 
         /// <summary>Επαληθεύει ότι η ταυτόχρονη αρχικοποίηση ενεργοποιεί ακριβώς μία βάση.</summary>
@@ -280,6 +396,17 @@ namespace Blueprint.Tests.Lifecycle
                 {
                     Dispose();
                     throw;
+                }
+            }
+
+            /// <summary>Εκτελεί έναν έλεγχο κρατώντας το ίδιο lock που προστατεύει τις λειτουργίες της βάσης.</summary>
+            /// <param name="action">Ο έλεγχος που θα εκτελεστεί με αποκλειστική πρόσβαση.</param>
+            /// <exception cref="Exception">Αποτυγχάνει ο δοσμένος έλεγχος.</exception>
+            internal void RunUnderLock(Action action)
+            {
+                lock (fSyncRoot)
+                {
+                    action();
                 }
             }
 

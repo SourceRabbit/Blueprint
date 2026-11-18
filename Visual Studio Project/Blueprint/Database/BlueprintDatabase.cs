@@ -14,7 +14,7 @@ namespace Blueprint.Database
     /// <summary>Manages entity contracts, languages, and the active database used by the Entity API.</summary>
     public abstract class BlueprintDatabase : IDisposable
     {
-        private static BlueprintDatabase? fActiveInstance;
+        private static volatile BlueprintDatabase? fActiveInstance;
         private readonly string fName;
         private readonly string fConnectionString;
         private readonly HashSet<Type> fEntityTypes = new();
@@ -42,11 +42,11 @@ namespace Blueprint.Database
             fName = name;
             fConnectionString = connectionString;
             fLanguages = LanguageColumns.ValidateLanguages(languages).AsReadOnly();
-            if (Volatile.Read(ref fActiveInstance) != null)
+            if (fActiveInstance != null)
             {
                 throw new InvalidOperationException("Another Blueprint database is active. Dispose it before creating another database.");
             }
-            fTransactionFactory = new DatabaseTransactionFactory(this, fSyncRoot);
+            fTransactionFactory = new DatabaseTransactionFactory();
         }
 
         /// <summary>Executes provider-specific SQL on an independent connection without returning a result set.</summary>
@@ -140,7 +140,7 @@ namespace Blueprint.Database
         /// <summary>Creates a deferred query for a registered entity in the selected language.</summary>
         /// <typeparam name="TEntity">The registered entity class.</typeparam>
         /// <param name="language">The language ID, or null for the default language.</param>
-        /// <returns>A composable query bound to this database.</returns>
+        /// <returns>A composable query executed through the active database.</returns>
         /// <exception cref="ArgumentOutOfRangeException">The language is not configured.</exception>
         /// <exception cref="InvalidOperationException">The entity is not registered.</exception>
         /// <exception cref="ObjectDisposedException">The database has been disposed.</exception>
@@ -151,7 +151,7 @@ namespace Blueprint.Database
                 long languageID = language ?? context.EntityTypes.DefaultLanguageID;
                 _ = context.EntityTypes.getLanguage(languageID);
                 _ = ResolveType<TEntity>(context);
-                EntityQueryProvider provider = new EntityQueryProvider(this, typeof(TEntity), languageID);
+                EntityQueryProvider provider = new EntityQueryProvider(typeof(TEntity), languageID);
                 return new EntityQuery<TEntity>(provider);
             });
         }
@@ -170,7 +170,7 @@ namespace Blueprint.Database
                 long languageID = language ?? context.EntityTypes.DefaultLanguageID;
                 _ = context.EntityTypes.getLanguage(languageID);
                 _ = ResolveType<TEntity>(context);
-                return new BlueprintEntityCommands<TEntity>(this, languageID);
+                return new BlueprintEntityCommands<TEntity>(languageID);
             });
         }
 
@@ -246,7 +246,10 @@ namespace Blueprint.Database
                     initialize(candidate);
                     fContext?.Dispose();
                     fContext = candidate;
+                    // Interlocked supplies the synchronization guarantees when the volatile field is passed by reference.
+#pragma warning disable CS0420
                     BlueprintDatabase? activeDatabase = Interlocked.CompareExchange(ref fActiveInstance, this, null);
+#pragma warning restore CS0420
                     if (activeDatabase != null && !ReferenceEquals(activeDatabase, this))
                     {
                         fContext = null;
@@ -264,8 +267,13 @@ namespace Blueprint.Database
 
         /// <summary>Releases database resources, clears this database's active registration, and prevents further operations.</summary>
         /// <remarks>Stop any independent background managers using this database before disposal. Repeated disposal is safe.</remarks>
+        /// <exception cref="InvalidOperationException">Disposal is requested from inside a database operation.</exception>
         public void Dispose()
         {
+            if (Monitor.IsEntered(fSyncRoot) && !fIsDisposed)
+            {
+                throw new InvalidOperationException("Dispose the database outside an existing database operation.");
+            }
             lock (fSyncRoot)
             {
                 if (fIsDisposed)
@@ -281,7 +289,10 @@ namespace Blueprint.Database
                 }
                 finally
                 {
+                    // Interlocked atomically clears only this instance and supplies the required memory ordering.
+#pragma warning disable CS0420
                     Interlocked.CompareExchange(ref fActiveInstance, null, this);
+#pragma warning restore CS0420
                 }
             }
         }
@@ -292,7 +303,16 @@ namespace Blueprint.Database
         {
             get
             {
-                return Volatile.Read(ref fActiveInstance) ?? throw new InvalidOperationException("No active Blueprint database exists. Create an initialized database first.");
+                return fActiveInstance ?? throw new InvalidOperationException("No active Blueprint database exists. Create an initialized database first.");
+            }
+        }
+
+        /// <summary>The shared lock protecting operations, transactions, and disposal for this instance.</summary>
+        internal object SyncRoot
+        {
+            get
+            {
+                return fSyncRoot;
             }
         }
 

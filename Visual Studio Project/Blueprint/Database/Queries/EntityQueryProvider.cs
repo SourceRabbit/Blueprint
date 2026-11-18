@@ -7,19 +7,16 @@ namespace Blueprint.Database.Queries
     /// <summary>Preserves LINQ composition and delegates execution to RAM cache or SQL executors under the database lock.</summary>
     internal sealed class EntityQueryProvider : IQueryProvider
     {
-        private readonly BlueprintDatabase fDatabase;
         private readonly long fLanguage;
         private readonly QueryExecutor fExecutor;
 
         /// <summary>Connects the query to the executor selected by the root entity's base class.</summary>
-        /// <param name="database">The query's database.</param>
         /// <param name="contract">The root entity class.</param>
         /// <param name="language">The language of the filters and results.</param>
-        internal EntityQueryProvider(BlueprintDatabase database, Type contract, long language)
+        internal EntityQueryProvider(Type contract, long language)
         {
-            fDatabase = database;
             fLanguage = language;
-            fExecutor = QueryExecutor.Create(database, contract, this, language);
+            fExecutor = QueryExecutor.Create(contract, this, language);
         }
 
         /// <summary>Builds a derived query without accessing the database.</summary>
@@ -47,7 +44,7 @@ namespace Blueprint.Database.Queries
         /// <exception cref="Exception">Query execution fails, or no executor accepts the expression.</exception>
         public TResult Execute<TResult>(Expression expression)
         {
-            return fDatabase.ExecuteOperation(context =>
+            return BlueprintDatabase.ACTIVE_INSTANCE.ExecuteOperation(context =>
             {
                 _ = context.EntityTypes.getLanguage(fLanguage);
                 if (fExecutor.TryExecute(context, expression, out TResult result))
@@ -73,7 +70,7 @@ namespace Blueprint.Database.Queries
         /// <exception cref="Exception">Query execution fails, or no executor accepts the expression.</exception>
         internal List<TElement> ExecuteList<TElement>(Expression expression)
         {
-            return fDatabase.ExecuteOperation(context =>
+            return BlueprintDatabase.ACTIVE_INSTANCE.ExecuteOperation(context =>
             {
                 _ = context.EntityTypes.getLanguage(fLanguage);
                 if (fExecutor.TryExecuteList<TElement>(context, expression, out List<TElement>? items))

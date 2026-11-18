@@ -9,34 +9,30 @@ namespace Blueprint.Database.Queries.QueryExecutors
     /// <summary>Defines query and relationship reads using the source selected by the entity base class.</summary>
     internal abstract class QueryExecutor
     {
-        protected readonly BlueprintDatabase fDatabase;
         protected readonly Type fContract;
         protected readonly IQueryProvider fProvider;
         protected readonly long fLanguage;
 
-        /// <summary>Stores the entity contract, database, provider and language shared by every executor.</summary>
-        /// <param name="database">The database owning the query.</param>
+        /// <summary>Stores the entity contract, provider and language shared by every executor.</summary>
         /// <param name="contract">The entity class to read.</param>
         /// <param name="provider">The provider that owns the original expression.</param>
         /// <param name="language">The selected language ID.</param>
-        protected QueryExecutor(BlueprintDatabase database, Type contract, IQueryProvider provider, long language)
+        protected QueryExecutor(Type contract, IQueryProvider provider, long language)
         {
-            fDatabase = database;
             fContract = contract;
             fProvider = provider;
             fLanguage = language;
         }
 
         /// <summary>Selects the executor from the entity's inheritance, independently of its parent relationships.</summary>
-        /// <param name="database">The database owning the query.</param>
         /// <param name="contract">The entity class to read.</param>
         /// <param name="provider">The original expression provider.</param>
         /// <param name="language">The selected language.</param>
         /// <returns>The database or RAM executor for this entity.</returns>
-        internal static QueryExecutor Create(BlueprintDatabase database, Type contract, IQueryProvider provider, long language)
+        internal static QueryExecutor Create(Type contract, IQueryProvider provider, long language)
         {
-            QueryExecutor_Database databaseExecutor = new QueryExecutor_Database(database, contract, provider, language);
-            return typeof(BlueprintEntityRAM).IsAssignableFrom(contract) ? new QueryExecutor_RAM(database, contract, provider, language, databaseExecutor) : databaseExecutor;
+            QueryExecutor_Database databaseExecutor = new QueryExecutor_Database(contract, provider, language);
+            return typeof(BlueprintEntityRAM).IsAssignableFrom(contract) ? new QueryExecutor_RAM(contract, provider, language, databaseExecutor) : databaseExecutor;
         }
 
         /// <summary>Executes a terminal operation through this entity's source and its supported fallback.</summary>

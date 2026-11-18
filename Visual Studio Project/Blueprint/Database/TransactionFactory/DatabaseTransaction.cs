@@ -17,7 +17,6 @@ namespace Blueprint.Database.TransactionFactory
         private readonly List<Action> fValidations;
         private readonly Action<DatabaseTransaction>? fPrepare;
         private int fPreparationThreadID;
-        private BlueprintDatabase? fDatabase;
         private bool fExecutionStarted;
         private bool fIsCompleted;
         private bool fIsCommitted;
@@ -30,19 +29,14 @@ namespace Blueprint.Database.TransactionFactory
             fValidations = new List<Action>();
         }
 
-        /// <summary>Binds the empty transaction to the database that created it.</summary>
-        /// <param name="database">The only database allowed to execute the transaction.</param>
-        /// <param name="prepare">Optional synchronous preparation of the list within the SQL transaction.</param>
-        /// <exception cref="ArgumentNullException">No database was provided.</exception>
+        /// <summary>Registers synchronous preparation of operations within the active database's SQL transaction.</summary>
+        /// <param name="prepare">Synchronous preparation of the list within the SQL transaction.</param>
+        /// <exception cref="ArgumentNullException">No callback was provided.</exception>
         /// <exception cref="ArgumentException">The callback is async void.</exception>
-        internal DatabaseTransaction(BlueprintDatabase database, Action<DatabaseTransaction>? prepare = null) : this()
+        internal DatabaseTransaction(Action<DatabaseTransaction> prepare) : this()
         {
-            ArgumentNullException.ThrowIfNull(database);
-            if (prepare != null)
-            {
-                ValidateCallback(prepare);
-            }
-            fDatabase = database;
+            ArgumentNullException.ThrowIfNull(prepare);
+            ValidateCallback(prepare);
             fPrepare = prepare;
         }
 
@@ -163,17 +157,15 @@ namespace Blueprint.Database.TransactionFactory
         }
 
         /// <summary>Atomically reserves the single execution and prevents further additions by the consumer.</summary>
-        /// <param name="database">The database that will execute the transaction.</param>
-        /// <exception cref="InvalidOperationException">The transaction belongs to another database or has already been submitted.</exception>
-        internal void BeginExecution(BlueprintDatabase database)
+        /// <exception cref="InvalidOperationException">The transaction has already been submitted.</exception>
+        internal void BeginExecution()
         {
             lock (fSyncRoot)
             {
-                if (fExecutionStarted || (fDatabase != null && !ReferenceEquals(fDatabase, database)))
+                if (fExecutionStarted)
                 {
-                    throw new InvalidOperationException("A transaction can be submitted once and only to its owning database.");
+                    throw new InvalidOperationException("A transaction can be submitted only once.");
                 }
-                fDatabase = database;
                 fExecutionStarted = true;
             }
         }

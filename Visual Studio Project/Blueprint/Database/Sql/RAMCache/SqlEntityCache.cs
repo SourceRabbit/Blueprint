@@ -10,7 +10,6 @@ namespace Blueprint.Database.Sql.RAMCache
     /// <summary>Synchronizes private snapshots of selected tables using SQL Change Tracking under the database lock.</summary>
     internal sealed class SqlEntityCache : IDisposable
     {
-        private readonly SqlDatabase fDatabase;
         private readonly BlueprintDatabaseContext fContext;
         private readonly Dictionary<Type, RAMCachedTable> fRAMCachedTables = new Dictionary<Type, RAMCachedTable>();
         private readonly Timer fTimer;
@@ -20,15 +19,13 @@ namespace Blueprint.Database.Sql.RAMCache
         private bool fIsDisposed;
         private int fRefreshIsRunning;
 
-        /// <summary>Fully loads RAM entity tables, then starts periodic synchronization without caching related DB entities.</summary>
-        /// <param name="database">The database that serializes context access.</param>
+        /// <summary>Fully loads RAM entity tables and prepares a stopped timer until the context and cache are published.</summary>
         /// <param name="context">The context after successful schema synchronization.</param>
         /// <param name="refreshInterval">The interval for checking external changes.</param>
         /// <exception cref="DbException">The initial data load fails.</exception>
         /// <exception cref="InvalidOperationException">An application transaction is active or Change Tracking is not enabled.</exception>
-        internal SqlEntityCache(SqlDatabase database, BlueprintDatabaseContext context, TimeSpan refreshInterval)
+        internal SqlEntityCache(BlueprintDatabaseContext context, TimeSpan refreshInterval)
         {
-            fDatabase = database;
             fContext = context;
             fRefreshInterval = refreshInterval;
             foreach (Type contract in context.EntityTypes.GetRAMCachedContracts())
@@ -36,7 +33,13 @@ namespace Blueprint.Database.Sql.RAMCache
                 fRAMCachedTables.Add(contract, new RAMCachedTable(context, contract));
             }
             Refresh();
-            fTimer = new Timer(RefreshInBackground, null, refreshInterval, refreshInterval);
+            fTimer = new Timer(RefreshInBackground, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+        }
+
+        /// <summary>Starts periodic refresh after the database has activated and published this cache under its lock.</summary>
+        internal void Start()
+        {
+            fTimer.Change(fRefreshInterval, fRefreshInterval);
         }
 
         /// <summary>Finds a cached table while preserving SQL reads inside application transactions.</summary>
@@ -122,7 +125,17 @@ namespace Blueprint.Database.Sql.RAMCache
             }
             try
             {
-                fDatabase.ExecuteOperation(context =>
+                BlueprintDatabase database;
+                try
+                {
+                    database = BlueprintDatabase.ACTIVE_INSTANCE;
+                }
+                catch (InvalidOperationException)
+                {
+                    // Disposal may clear the active instance before an already queued callback starts.
+                    return;
+                }
+                database.ExecuteOperation(context =>
                 {
                     if (!fIsDisposed && ReferenceEquals(context, fContext))
                     {

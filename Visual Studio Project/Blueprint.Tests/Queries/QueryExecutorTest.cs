@@ -57,12 +57,12 @@ namespace Blueprint.Tests.Queries
                 Assert(deferred.ToQueryString() == priceSql, "A deferred query must resolve the current context after registering another entity.");
                 Assert(translated.ToQueryString().Contains("[TitleFR]"), "Recreated contexts must preserve the language of existing queries.");
             }
-            AssertThrows<ObjectDisposedException>(() => deferred.ToList(), "Deferred queries must remain bound to their disposed database.");
+            AssertThrows<InvalidOperationException>(() => deferred.ToList(), "Deferred queries must reject a missing active database.");
+            AssertThrows<InvalidOperationException>(() => ((System.Collections.IEnumerable)deferred).GetEnumerator(), "Non-generic enumeration must reject a missing active database.");
             using (QueryModelDatabase replacement = new QueryModelDatabase())
             {
                 replacement.RegisterEntity<ExecutorProduct>();
-                AssertThrows<ObjectDisposedException>(() => deferred.ToQueryString(), "An existing query must not switch to a replacement active database.");
-                AssertThrows<ObjectDisposedException>(() => ((System.Collections.IEnumerable)deferred).GetEnumerator(), "Non-generic enumeration must preserve the database lifetime checks.");
+                Assert(deferred.ToQueryString().Contains("[Price] = 10"), "Deferred queries must resolve the currently active database at execution time.");
             }
             Console.WriteLine($"Query executor translation checks passed: {getAssertionCount()} assertions.");
         }

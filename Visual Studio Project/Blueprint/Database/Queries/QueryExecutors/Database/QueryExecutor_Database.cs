@@ -7,12 +7,11 @@ namespace Blueprint.Database.Queries.QueryExecutors.Database
     /// <summary>Translates and executes queries through EF Core while preserving the language and visitor order.</summary>
     internal sealed class QueryExecutor_Database : QueryExecutor
     {
-        /// <summary>Binds SQL execution to the root contract and its database.</summary>
-        /// <param name="database">The database owning the query.</param>
+        /// <summary>Binds SQL execution to the root contract, provider and language.</summary>
         /// <param name="contract">The entity class to read.</param>
         /// <param name="provider">The provider that owns the original expression.</param>
         /// <param name="language">The language ID used by filters and results.</param>
-        internal QueryExecutor_Database(BlueprintDatabase database, Type contract, IQueryProvider provider, long language) : base(database, contract, provider, language)
+        internal QueryExecutor_Database(Type contract, IQueryProvider provider, long language) : base(contract, provider, language)
         {
         }
 
@@ -33,7 +32,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.Database
                 result = root.Provider.Execute<TResult>(Translate(expression, root, context.EntityTypes.DefaultLanguageID));
                 if (result is BlueprintEntity entity)
                 {
-                    EntityIncludes.Load(fDatabase, context, new[] { entity }, fLanguage);
+                    EntityIncludes.Load(context, new[] { entity }, fLanguage);
                 }
                 return true;
             }
@@ -58,7 +57,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.Database
             {
                 context.QueryLanguage = fLanguage;
                 items = root.Provider.CreateQuery<TElement>(Translate(expression, root, context.EntityTypes.DefaultLanguageID)).ToList();
-                EntityIncludes.Load(fDatabase, context, items.OfType<BlueprintEntity>(), fLanguage);
+                EntityIncludes.Load(context, items.OfType<BlueprintEntity>(), fLanguage);
                 return true;
             }
             finally
