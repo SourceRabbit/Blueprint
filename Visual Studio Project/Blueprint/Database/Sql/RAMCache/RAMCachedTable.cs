@@ -1,4 +1,4 @@
-using Blueprint.Database.Entities;
+using Blueprint.Entities;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;

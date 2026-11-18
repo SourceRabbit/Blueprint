@@ -65,7 +65,7 @@ After adding a Blueprint reference, define an entity contract, configure the dat
 Once the [Product contract](.wiki/Database-Tutorial-EShop-Checkout.md#define-a-contract) is registered and `database` is active:
 
 ```csharp
-using Blueprint.Database.Entities;
+using Blueprint.Entities;
 using Blueprint.Database.TransactionFactory;
 
 Product product = Product.Create();

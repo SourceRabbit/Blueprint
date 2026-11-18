@@ -6,11 +6,11 @@ Annotations on an entity class describe its SQL mapping, constraints, relationsh
 
 | Annotation | Namespace | Purpose |
 | --- | --- | --- |
-| `Entity` | `Blueprint.Database.Entities.Annotations` | Marks a contract; optionally sets table name and `Schema` (default `dbo`). |
-| `EntityIndex` | `Blueprint.Database.Entities.Annotations` | Defines a named index over mapped properties; `IsUnique` defaults to false. |
-| `Multilingual` | `Blueprint.Database.Entities.Annotations` | Stores a separate value for each configured language. |
-| `FallbackToDefaultLanguage` | `Blueprint.Database.Entities.Annotations` | Requires `Multilingual`; reads the default value when the selected translation is null or empty, without changing stored translations. |
-| `AutoInclude` | `Blueprint.Database.Entities.Annotations` | Automatically loads the navigation through the target entity's own DB or RAM executor, independently of the parent's source. |
+| `Entity` | `Blueprint.Entities.Annotations` | Marks a contract; optionally sets table name and `Schema` (default `dbo`). |
+| `EntityIndex` | `Blueprint.Entities.Annotations` | Defines a named index over mapped properties; `IsUnique` defaults to false. |
+| `Multilingual` | `Blueprint.Entities.Annotations` | Stores a separate value for each configured language. |
+| `FallbackToDefaultLanguage` | `Blueprint.Entities.Annotations` | Requires `Multilingual`; reads the default value when the selected translation is null or empty, without changing stored translations. |
+| `AutoInclude` | `Blueprint.Entities.Annotations` | Automatically loads the navigation through the target entity's own DB or RAM executor, independently of the parent's source. |
 | `Required` | `System.ComponentModel.DataAnnotations` | Requires a stored value. For multilingual fields, applies to every language. |
 | `MaxLength`, `StringLength` | `System.ComponentModel.DataAnnotations` | Sets the maximum stored length. `StringLength.MinimumLength` is not a database validation rule. |
 | `Timestamp` | `System.ComponentModel.DataAnnotations` | Maps a SQL Server rowversion concurrency token. |
@@ -31,8 +31,8 @@ Blueprint does not run a general form-validation pipeline for every .NET validat
 This separate contract demonstrates common annotations. Register it with `database.RegisterEntity<Category>()` before using `Category.Create()` or querying it.
 
 ```csharp
-using Blueprint.Database.Entities.Annotations;
-using Blueprint.Database.Entities;
+using Blueprint.Entities.Annotations;
+using Blueprint.Entities;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;

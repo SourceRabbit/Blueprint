@@ -3,12 +3,12 @@ using System.Reflection;
 using System.Reflection.Emit;
 using System.ComponentModel.DataAnnotations.Schema;
 using Blueprint.Localization;
-using Blueprint.Database.Entities;
-using Blueprint.Database.Entities.Annotations;
+using Blueprint.Entities;
+using Blueprint.Entities.Annotations;
 using Blueprint.Fundamentals;
 using System.Text.Json;
 
-namespace Blueprint.Database.Entities
+namespace Blueprint.Entities
 {
     /// <summary>Generates concrete classes for entity contracts without accessing the database.</summary>
     internal sealed class BlueprintEntityTypes

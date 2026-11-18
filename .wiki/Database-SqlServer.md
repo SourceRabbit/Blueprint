@@ -136,8 +136,8 @@ It uses the local Windows-authentication connection string, English and Greek, a
 using Blueprint.Database;
 using Blueprint.Database.Sql;
 using Blueprint.Fundamentals;
-using Blueprint.Database.Entities.Annotations;
-using Blueprint.Database.Entities;
+using Blueprint.Entities.Annotations;
+using Blueprint.Entities;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
@@ -295,7 +295,7 @@ The languages are configured at construction and exposed through `BlueprintDatab
 
 Use the database for configuration, registration, and lifetime management. Create and access data through the Entity API, such as `Product.Create()`, `Product.Where(...)`, `Product.Insert(...)`, and `Product.Update(...)`.
 
-Although `BlueprintDatabase` exposes `Create<TEntity>()`, direct use of this helper belongs to Blueprint's implementation. The former `Collection<TEntity>()` helper has been removed; queries and writes are accessed through the Entity API. Applications, demos, and tests use the Entity API. Import `Blueprint.Database.Entities` in files using its static extensions.
+Although `BlueprintDatabase` exposes `Create<TEntity>()`, direct use of this helper belongs to Blueprint's implementation. The former `Collection<TEntity>()` helper has been removed; queries and writes are accessed through the Entity API. Applications, demos, and tests use the Entity API. Import `Blueprint.Entities` in files using its static extensions.
 
 Entities returned by queries are independent instances without permanent tracking. Changing a property does not save it automatically; call the appropriate Entity method. See [EShop - Checkout Tutorial](Database-Tutorial-EShop-Checkout.md) and [Queries and CRUD](Database-Queries-and-CRUD.md).
 

@@ -1,4 +1,4 @@
-namespace Blueprint.Database.Entities.Annotations
+namespace Blueprint.Entities.Annotations
 {
     /// <summary>Marks a class as a persistent entity and optionally specifies its table.</summary>
     [AttributeUsage(AttributeTargets.Class, Inherited = false)]

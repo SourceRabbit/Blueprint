@@ -1,6 +1,6 @@
 # Queries and CRUD
 
-Use the static Entity API on registered contracts for reads and writes. Import `Blueprint.Database.Entities` and `System.Linq`; initialize the database and register the contracts as shown in the [complete checkout example](Database-Tutorial-EShop-Checkout.md#complete-example-in-main).
+Use the static Entity API on registered contracts for reads and writes. Import `Blueprint.Entities` and `System.Linq`; initialize the database and register the contracts as shown in the [complete checkout example](Database-Tutorial-EShop-Checkout.md#complete-example-in-main).
 
 The Entity API keeps the same signatures for reads and writes. The former `Collection<TEntity>` type and `database.Collection<TEntity>()` helpers have been removed. Use the Entity API for these operations, and import `Blueprint.Database.Queries` for `TextSearch` extensions.
 
@@ -11,7 +11,7 @@ Both DB and RAM entity classes use this same LINQ syntax. Blueprint selects `Que
 ## Filter, order, and page
 
 ```csharp
-using Blueprint.Database.Entities;
+using Blueprint.Entities;
 using System.Linq;
 
 decimal minimumPrice = 50m;
@@ -33,7 +33,7 @@ Import `Blueprint.Database.Queries` and `System.Globalization` to use Blueprint'
 
 ```csharp
 using Blueprint.Database.Queries;
-using Blueprint.Database.Entities;
+using Blueprint.Entities;
 using System.Globalization;
 using System.Linq;
 

@@ -1,6 +1,6 @@
 using System.Collections;
 using Blueprint.Database.Sql.RAMCache;
-using Blueprint.Database.Entities;
+using Blueprint.Entities;
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Blueprint.Database.Queries.QueryExecutors.Database;

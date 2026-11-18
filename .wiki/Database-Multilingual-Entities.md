@@ -32,7 +32,7 @@ The [Product contract](Database-Tutorial-EShop-Checkout.md#define-a-contract) de
 public abstract string? Title { get; set; }
 ```
 
-This declaration belongs inside an abstract entity class derived from `BlueprintEntityDB` or `BlueprintEntityRAM`, with `Blueprint.Database.Entities.Annotations` and `System.ComponentModel.DataAnnotations` imported. An implemented multilingual property must use overridable `virtual` accessors so the generated subclass can select its translation.
+This declaration belongs inside an abstract entity class derived from `BlueprintEntityDB` or `BlueprintEntityRAM`, with `Blueprint.Entities.Annotations` and `System.ComponentModel.DataAnnotations` imported. An implemented multilingual property must use overridable `virtual` accessors so the generated subclass can select its translation.
 
 | Language ID | Prefix | SQL column for `Title` |
 | --- | --- | --- |
@@ -44,7 +44,7 @@ Generated suffixes use the uppercased prefix while preserving the base column na
 ## Write translations
 
 ```csharp
-using Blueprint.Database.Entities;
+using Blueprint.Entities;
 
 Product product = Product.Create();
 product.SKU = "CAMERA-TRANSLATED-001";
@@ -88,7 +88,7 @@ Apply `[FallbackToDefaultLanguage]` alongside `[Multilingual]` before registerin
 public abstract string? Title { get; set; }
 ```
 
-Both annotations belong to `Blueprint.Database.Entities.Annotations`. Registration rejects `[FallbackToDefaultLanguage]` without `[Multilingual]`, or on a property that is not a mapped string.
+Both annotations belong to `Blueprint.Entities.Annotations`. Registration rejects `[FallbackToDefaultLanguage]` without `[Multilingual]`, or on a property that is not a mapped string.
 
 When the selected translation is `null` or `""`, reads return the default-language value. The default is the language with an empty `Prefix`, regardless of its ID or position in the language list. Whitespace-only values, such as `" "`, are returned unchanged. If the default value is also missing, its exact `null` or empty value is returned; no other language is searched. Properties without the annotation keep their existing behavior.
 

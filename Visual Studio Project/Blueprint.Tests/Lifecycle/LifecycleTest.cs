@@ -1,7 +1,7 @@
 using Blueprint.BackgroundTasks;
 using Blueprint.BackgroundTasks.Schedule;
-using Blueprint.Database.Entities.Annotations;
-using Blueprint.Database.Entities;
+using Blueprint.Entities.Annotations;
+using Blueprint.Entities;
 using Blueprint.Database;
 using Blueprint.Database.Sql;
 using Blueprint.Fundamentals;

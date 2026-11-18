@@ -17,7 +17,7 @@ public abstract class Product : BlueprintEntityRAM
 }
 ```
 
-Import `Blueprint.Database.Entities` and `Blueprint.Database.Entities.Annotations`. Keep the full Product contract from the checkout tutorial when using its other examples. `[RAMCached]` has been removed; cache selection now follows inheritance. Set the refresh interval on the database when needed:
+Import `Blueprint.Entities` and `Blueprint.Entities.Annotations`. Keep the full Product contract from the checkout tutorial when using its other examples. `[RAMCached]` has been removed; cache selection now follows inheritance. Set the refresh interval on the database when needed:
 
 ```csharp
 database.RAMCacheRefreshInterval = TimeSpan.FromSeconds(2);

@@ -1,5 +1,5 @@
-using Blueprint.Database.Entities.Annotations;
-using Blueprint.Database.Entities;
+using Blueprint.Entities.Annotations;
+using Blueprint.Entities;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq.Expressions;
 

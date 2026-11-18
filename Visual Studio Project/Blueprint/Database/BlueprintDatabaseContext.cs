@@ -9,8 +9,8 @@ using System.ComponentModel;
 using Blueprint.Localization;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Storage;
-using Blueprint.Database.Entities;
-using Blueprint.Database.Entities.Annotations;
+using Blueprint.Entities;
+using Blueprint.Entities.Annotations;
 using Blueprint.Database.Queries;
 using Blueprint.Fundamentals;
 
@@ -102,7 +102,7 @@ namespace Blueprint.Database
                 EntityTypeBuilder builder = modelBuilder.Entity(concreteType);
                 builder.HasBaseType((Type?)null);
                 builder.ToTable(tableName, attribute.Schema);
-                foreach (PropertyInfo property in global::Blueprint.Database.Entities.BlueprintEntityTypes.GetProperties(contract))
+                foreach (PropertyInfo property in global::Blueprint.Entities.BlueprintEntityTypes.GetProperties(contract))
                 {
                     if (property.IsDefined(typeof(NotMappedAttribute)))
                     {
@@ -116,7 +116,7 @@ namespace Blueprint.Database
                             ConfigureProperty(builder, property, language);
                         }
                     }
-                    else if (global::Blueprint.Database.Entities.BlueprintEntityTypes.GetRelatedContract(property.PropertyType) == null)
+                    else if (global::Blueprint.Entities.BlueprintEntityTypes.GetRelatedContract(property.PropertyType) == null)
                     {
                         ConfigureProperty(builder, property);
                     }
@@ -139,7 +139,7 @@ namespace Blueprint.Database
 
             foreach ((Type contract, Type concreteType) in fEntityTypes.Types)
             {
-                foreach (PropertyInfo property in global::Blueprint.Database.Entities.BlueprintEntityTypes.GetProperties(contract).Where(property => typeof(BlueprintEntity).IsAssignableFrom(property.PropertyType) && !property.IsDefined(typeof(NotMappedAttribute))))
+                foreach (PropertyInfo property in global::Blueprint.Entities.BlueprintEntityTypes.GetProperties(contract).Where(property => typeof(BlueprintEntity).IsAssignableFrom(property.PropertyType) && !property.IsDefined(typeof(NotMappedAttribute))))
                 {
                     ConfigureReference(modelBuilder, concreteType, contract, property);
                 }
@@ -147,9 +147,9 @@ namespace Blueprint.Database
 
             foreach ((Type contract, Type concreteType) in fEntityTypes.Types)
             {
-                foreach (PropertyInfo property in global::Blueprint.Database.Entities.BlueprintEntityTypes.GetProperties(contract).Where(property => !property.IsDefined(typeof(NotMappedAttribute))))
+                foreach (PropertyInfo property in global::Blueprint.Entities.BlueprintEntityTypes.GetProperties(contract).Where(property => !property.IsDefined(typeof(NotMappedAttribute))))
                 {
-                    if (global::Blueprint.Database.Entities.BlueprintEntityTypes.GetRelatedContract(property.PropertyType) != null && modelBuilder.Entity(concreteType).Metadata.FindNavigation(property.Name) == null)
+                    if (global::Blueprint.Entities.BlueprintEntityTypes.GetRelatedContract(property.PropertyType) != null && modelBuilder.Entity(concreteType).Metadata.FindNavigation(property.Name) == null)
                     {
                         throw new InvalidOperationException($"Navigation '{contract}.{property.Name}' requires an inverse reference with an unambiguous foreign key.");
                     }
@@ -219,7 +219,7 @@ namespace Blueprint.Database
         private void ConfigureReference(ModelBuilder modelBuilder, Type concreteType, Type contract, PropertyInfo property)
         {
             var related = property.PropertyType;
-            var properties = global::Blueprint.Database.Entities.BlueprintEntityTypes.GetProperties(contract).ToArray();
+            var properties = global::Blueprint.Entities.BlueprintEntityTypes.GetProperties(contract).ToArray();
             var foreignKey = property.GetCustomAttribute<ForeignKeyAttribute>()?.Name;
             var keys = foreignKey?.Split(',', StringSplitOptions.TrimEntries) ?? new[] { property.Name + "ID" };
             if (keys.Any(key => properties.All(item => item.Name != key)))
@@ -228,7 +228,7 @@ namespace Blueprint.Database
             }
 
             var inverseName = property.GetCustomAttribute<InversePropertyAttribute>()?.Property;
-            var candidates = global::Blueprint.Database.Entities.BlueprintEntityTypes.GetProperties(related).Where(item => item.PropertyType != contract && global::Blueprint.Database.Entities.BlueprintEntityTypes.GetRelatedContract(item.PropertyType) == contract && !item.IsDefined(typeof(NotMappedAttribute))).ToArray();
+            var candidates = global::Blueprint.Entities.BlueprintEntityTypes.GetProperties(related).Where(item => item.PropertyType != contract && global::Blueprint.Entities.BlueprintEntityTypes.GetRelatedContract(item.PropertyType) == contract && !item.IsDefined(typeof(NotMappedAttribute))).ToArray();
             if (inverseName == null)
             {
                 var matching = candidates.Where(item => item.GetCustomAttribute<InversePropertyAttribute>()?.Property == property.Name).ToArray();

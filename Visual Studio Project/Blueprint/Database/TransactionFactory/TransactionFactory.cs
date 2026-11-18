@@ -1,4 +1,4 @@
-using Blueprint.Database.Entities;
+using Blueprint.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata;

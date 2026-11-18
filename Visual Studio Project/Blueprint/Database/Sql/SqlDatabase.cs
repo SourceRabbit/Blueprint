@@ -3,7 +3,7 @@ using System.Linq;
 using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Data.SqlClient;
-using Blueprint.Database.Entities;
+using Blueprint.Entities;
 using Blueprint.Database.Sql.RAMCache;
 using Blueprint.Fundamentals;
 

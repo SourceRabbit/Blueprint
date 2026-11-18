@@ -24,8 +24,8 @@ The executors are internal implementation classes, not consumer configuration ob
 This standalone model uses separate example tables. Import the namespaces below and register Product; its Category contract is discovered automatically.
 
 ```csharp
-using Blueprint.Database.Entities;
-using Blueprint.Database.Entities.Annotations;
+using Blueprint.Entities;
+using Blueprint.Entities.Annotations;
 using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations.Schema;
 

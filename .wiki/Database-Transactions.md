@@ -6,7 +6,7 @@ There are no consumer-managed begin, commit, or rollback steps. The factory is t
 
 ## Public API
 
-Import `Blueprint.Database.TransactionFactory` for `TransactionFactory` and `DatabaseTransaction`, and `Blueprint.Database.Entities` for the Entity API.
+Import `Blueprint.Database.TransactionFactory` for `TransactionFactory` and `DatabaseTransaction`, and `Blueprint.Entities` for the Entity API.
 
 | Member | Purpose |
 | --- | --- |
@@ -24,7 +24,7 @@ Import `Blueprint.Database.TransactionFactory` for `TransactionFactory` and `Dat
 This example assumes the [Product contract](Database-Tutorial-EShop-Checkout.md#define-a-contract), an active `database`, and two different existing IDs supplied by the application.
 
 ```csharp
-using Blueprint.Database.Entities;
+using Blueprint.Entities;
 using Blueprint.Database.TransactionFactory;
 
 Product addedProduct = Product.Create();

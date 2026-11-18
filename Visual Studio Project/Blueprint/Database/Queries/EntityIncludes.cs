@@ -1,5 +1,5 @@
-using Blueprint.Database.Entities;
-using Blueprint.Database.Entities.Annotations;
+using Blueprint.Entities;
+using Blueprint.Entities.Annotations;
 using Blueprint.Database.Queries.QueryExecutors;
 using Microsoft.EntityFrameworkCore.Metadata;
 using System.Reflection;

@@ -7,8 +7,8 @@ Relationships connect entity contracts through their IDs. Define a scalar foreig
 This example uses a simplified version of the [Product contract](Database-Tutorial-EShop-Checkout.md#define-a-contract) with an additional brand relationship. Keep one `Product` definition in your application.
 
 ```csharp
-using Blueprint.Database.Entities.Annotations;
-using Blueprint.Database.Entities;
+using Blueprint.Entities.Annotations;
+using Blueprint.Entities;
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;

@@ -1,4 +1,4 @@
-namespace Blueprint.Database.Entities.Annotations
+namespace Blueprint.Entities.Annotations
 {
     /// <summary>Declares an index on stored properties of a BlueprintEntity class.</summary>
     [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]

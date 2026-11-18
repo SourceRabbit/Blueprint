@@ -1,6 +1,6 @@
 using System;
 
-namespace Blueprint.Database.Entities.Annotations
+namespace Blueprint.Entities.Annotations
 {
     /// <summary>
     /// Requests that Blueprint collections load this EF Core relationship along with complete entities.

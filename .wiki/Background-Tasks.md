@@ -9,7 +9,7 @@ Create a subclass of `BackgroundTask` and implement the synchronous `Run()` meth
 ```csharp
 using Blueprint.BackgroundTasks;
 using Blueprint.BackgroundTasks.Schedule;
-using Blueprint.Database.Entities;
+using Blueprint.Entities;
 using System;
 using System.Linq;
 

@@ -1,10 +1,11 @@
 using Blueprint.Database.Queries;
+using Blueprint.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata;
 using System.Linq.Expressions;
 
-namespace Blueprint.Database.Entities
+namespace Blueprint.Database.Sql
 {
     /// <summary>Persists entity changes immediately through SQL and invalidates cached snapshots.</summary>
     /// <typeparam name="TEntity">The registered entity class.</typeparam>

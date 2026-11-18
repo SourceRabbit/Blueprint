@@ -1,5 +1,5 @@
-using Blueprint.Database.Entities;
-using Blueprint.Database.Entities.Annotations;
+using Blueprint.Entities;
+using Blueprint.Entities.Annotations;
 using Microsoft.EntityFrameworkCore;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;

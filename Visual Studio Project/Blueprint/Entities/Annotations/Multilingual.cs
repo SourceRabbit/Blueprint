@@ -1,4 +1,4 @@
-namespace Blueprint.Database.Entities.Annotations
+namespace Blueprint.Entities.Annotations
 {
     /// <summary>Declares that a property stores a separate value for each language.</summary>
     /// <remarks>Applies to string properties and generates one column per BlueprintLanguage configured during initialization. CurrentLanguage selects the value by ID.</remarks>

@@ -46,7 +46,7 @@ This manual describes the consumer API available in this repository. Examples ta
 
 ## Reading the examples
 
-Use `using Blueprint.Database.Entities;` for the static Entity API. Most examples use the [Product contract](Database-Tutorial-EShop-Checkout.md#define-a-contract) from the EShop checkout tutorial and assume its registration and an active `BlueprintDatabase`. A page that requires another contract shows that contract explicitly.
+Use `using Blueprint.Entities;` for the static Entity API. Most examples use the [Product contract](Database-Tutorial-EShop-Checkout.md#define-a-contract) from the EShop checkout tutorial and assume its registration and an active `BlueprintDatabase`. A page that requires another contract shows that contract explicitly.
 
 Code blocks are independent examples unless stated otherwise. Replace sample connection strings and IDs with values for your application. All database writes should be explicit: editing a loaded object's properties does not save it automatically.
 

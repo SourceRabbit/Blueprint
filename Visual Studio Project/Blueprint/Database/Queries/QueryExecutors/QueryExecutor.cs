@@ -1,5 +1,5 @@
 using System.Linq.Expressions;
-using Blueprint.Database.Entities;
+using Blueprint.Entities;
 using Blueprint.Database.Queries.QueryExecutors.RAM;
 using Blueprint.Database.Queries.QueryExecutors.Database;
 using Microsoft.EntityFrameworkCore.Metadata;

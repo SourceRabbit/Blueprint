@@ -1,6 +1,6 @@
 using Blueprint.Database;
-using Blueprint.Database.Entities;
-using Blueprint.Database.Entities.Annotations;
+using Blueprint.Entities;
+using Blueprint.Entities.Annotations;
 using Blueprint.Database.Sql;
 using Blueprint.Fundamentals;
 using Microsoft.Data.SqlClient;

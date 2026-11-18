@@ -6,7 +6,7 @@ Start with the exception and its inner exceptions, the operation being performed
 
 | Symptom | Check and next step |
 | --- | --- |
-| Static methods such as `Product.Create()` are not found | Import `Blueprint.Database.Entities`, use .NET 10 with C# 14, and reference the intended Blueprint assembly. |
+| Static methods such as `Product.Create()` are not found | Import `Blueprint.Entities`, use .NET 10 with C# 14, and reference the intended Blueprint assembly. |
 | A previously valid API call no longer builds after replacing a DLL | Rebuild consumers against the same DLL and compatible dependencies. Transactions now use `database.TransactionFactory`; see [Transactions](Database-Transactions.md). |
 | `SqlDatabase` construction fails | Check server reachability, authentication, certificate configuration, and permissions to access or create the named database. Construction connects immediately. |
 | An entity cannot be created or queried | Ensure it is a public, non-sealed class deriving from `BlueprintEntityDB` or `BlueprintEntityRAM`, has `[Entity]`, is registered, and the database has initialized successfully. |

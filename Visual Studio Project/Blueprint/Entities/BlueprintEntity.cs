@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace Blueprint.Database.Entities
+namespace Blueprint.Entities
 {
     /// <summary>The shared identity of every entity, with a unique increasing number per table.</summary>
     public abstract class BlueprintEntity

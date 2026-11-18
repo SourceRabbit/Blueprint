@@ -15,6 +15,8 @@ Blueprint currently provides SQL Server support through `SqlDatabase`. See [SQL 
 
 Entities are public, non-sealed classes derived from `BlueprintEntityDB` or `BlueprintEntityRAM`, with `[Entity]` on each registered class. Both persist in SQL; the RAM base also enables synchronized caching. Existing interface-based entities must be migrated and consumers rebuilt. See [entity class requirements and migration](Database-Entities-BlueprintEntity.md#migrating-existing-entities).
 
+Import `Blueprint.Entities` for entity classes and their static API, and `Blueprint.Entities.Annotations` for Blueprint annotations. Consumers upgrading from the former entity namespaces must update their imports and rebuild; see [namespace migration](Database-Entities-BlueprintEntity.md#updating-namespace-imports).
+
 ## Prepare your project
 
 Create a .NET application or open your existing project, and confirm that its target framework is .NET 10. Choose one of the following reference methods for the consuming project.

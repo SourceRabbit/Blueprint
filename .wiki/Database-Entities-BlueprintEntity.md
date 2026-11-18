@@ -1,6 +1,6 @@
 # BlueprintEntity
 
-`BlueprintEntity` is the abstract base class shared by every entity. It belongs to `Blueprint.Database.Entities` and defines `ID` and `CurrentLanguage`. Two abstract classes derive directly from it:
+`BlueprintEntity` is the abstract base class shared by every entity. It belongs to `Blueprint.Entities` and defines `ID` and `CurrentLanguage`. Two abstract classes derive directly from it:
 
 | Base class | Behavior |
 | --- | --- |
@@ -12,6 +12,8 @@ Define a public, non-sealed class deriving from one of these two classes and mar
 Both base classes use the same CRUD, transaction, translation, relationship, and concurrency APIs. Cache selection follows class inheritance, including intermediate base classes. The `[RAMCached]` annotation has been removed. See [RAM Caching](Database-RAM-Caching.md) for synchronization and `AutoInclude` dependencies.
 
 Every automatically included entity selects its own executor. A DB parent can contain a RAM child and a RAM parent can contain a DB child. `AutoInclude` requests loading; it does not change the target's data source or enable caching for DB classes. See [Query Executors](Database-Query-Executors.md) for the hierarchy, shared LINQ API, and mixed-source relationships. Transaction reads use SQL for the entire graph.
+
+Entity definitions, generated entity types, and the shared Entity API are organized under `Blueprint.Entities`, with public annotations in `Blueprint.Entities.Annotations`. SQL persistence stays under `Blueprint.Database.Sql`; its internal `BlueprintEntityCommands` handles inserts, updates, and deletes. This namespace separation preserves the existing SQL storage, RAM synchronization, and query behavior.
 
 ## Inherited properties
 
@@ -25,8 +27,8 @@ New instances use the language whose configured prefix is empty. The default lan
 ## Define an entity
 
 ```csharp
-using Blueprint.Database.Entities;
-using Blueprint.Database.Entities.Annotations;
+using Blueprint.Entities;
+using Blueprint.Entities.Annotations;
 
 namespace BlueprintManual
 {
@@ -55,7 +57,7 @@ Entity class inheritance does not introduce SQL inheritance tables or discrimina
 
 ## Register and create an instance
 
-Initialize the database as described in [SQL Server](Database-SqlServer.md). Inside its lifetime, register the contract before using its Entity API. The following statements assume an active `database` and run where `CatalogItem` is in scope, with `Blueprint.Database.Entities` imported:
+Initialize the database as described in [SQL Server](Database-SqlServer.md). Inside its lifetime, register the contract before using its Entity API. The following statements assume an active `database` and run where `CatalogItem` is in scope, with `Blueprint.Entities` imported:
 
 ```csharp
 database.RegisterEntity<CatalogItem>();
@@ -68,11 +70,24 @@ CatalogItem.Insert(item);
 
 Registration synchronizes the entity's schema and prepares any configured cache. `Create()` produces an unsaved instance; `Insert()` writes it to the database and fills its `ID`. Leave the ID at zero before insertion.
 
-Calls such as `CatalogItem.Create()`, `CatalogItem.Where(...)`, and `CatalogItem.Insert(...)` are supplied by `BlueprintEntityQueries` through the `Blueprint.Database.Entities` namespace. They use the active database and require the entity contract to be registered.
+Calls such as `CatalogItem.Create()`, `CatalogItem.Where(...)`, and `CatalogItem.Insert(...)` are supplied by `BlueprintEntityQueries` through the `Blueprint.Entities` namespace. They use the active database and require the entity contract to be registered.
 
 Changing a loaded object's properties does not save it automatically. Use `Update(...)` or a transaction to persist changes. See [Queries and CRUD](Database-Queries-and-CRUD.md) and [Transactions](Database-Transactions.md) for reads and writes.
 
 ## Migrating existing entities
+
+### Updating namespace imports
+
+Update consumer imports and fully qualified references, then rebuild the library and all consumers:
+
+| Previous namespace | Current namespace |
+| --- | --- |
+| `Blueprint.Database.Entities` | `Blueprint.Entities` |
+| `Blueprint.Database.Entities.Annotations` | `Blueprint.Entities.Annotations` |
+
+The previous namespaces are no longer provided. Entity class names, static API calls, database tables, columns, and stored data stay unchanged. SQL configuration still uses `Blueprint.Database` and `Blueprint.Database.Sql`.
+
+### Migrating interface contracts
 
 1. Replace `public interface Product : BlueprintEntity` with `public abstract class Product : BlueprintEntityDB`, or use `BlueprintEntityRAM` for a previously cached entity.
 2. Remove `[RAMCached]` and add `public abstract` to the former interface properties. Alternatively use implemented class properties, keeping multilingual accessors virtual.

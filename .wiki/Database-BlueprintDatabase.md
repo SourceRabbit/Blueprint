@@ -84,7 +84,7 @@ The examples below use the [Product contract from the checkout tutorial](Databas
 
 ```csharp
 using Blueprint.Database;
-using Blueprint.Database.Entities;
+using Blueprint.Entities;
 using Blueprint.Database.Sql;
 using Blueprint.Fundamentals;
 using Microsoft.Data.SqlClient;
@@ -192,7 +192,7 @@ Stop background managers that use the database before disposal. For `SqlDatabase
 
 ## Access data through the Entity API
 
-Use `BlueprintDatabase` for configuration, registration, transactions, and lifetime management. Applications create and access data through entity methods such as `Product.Create()`, `Product.Where(...)`, `Product.Insert(...)`, and `Product.Update(...)`. Import `Blueprint.Database.Entities` to use these static extensions.
+Use `BlueprintDatabase` for configuration, registration, transactions, and lifetime management. Applications create and access data through entity methods such as `Product.Create()`, `Product.Where(...)`, `Product.Insert(...)`, and `Product.Update(...)`. Import `Blueprint.Entities` to use these static extensions.
 
 The public `Create<TEntity>()` helper supports Blueprint's implementation; application code uses the entity's `Create()` method. Query and command helpers are internal, and the former `Collection<TEntity>()` API has been removed. See [Queries and CRUD](Database-Queries-and-CRUD.md).
 

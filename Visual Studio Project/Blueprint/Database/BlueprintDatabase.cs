@@ -1,7 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Blueprint.Database.Entities;
+using Blueprint.Entities;
 using Blueprint.Database.Queries;
+using Blueprint.Database.Sql;
 using Blueprint.Database.Sql.RAMCache;
 using DatabaseTransactionFactory = Blueprint.Database.TransactionFactory.TransactionFactory;
 using Blueprint.Fundamentals;
@@ -122,7 +123,7 @@ namespace Blueprint.Database
                 var entity = (TEntity)Activator.CreateInstance(type)!;
                 foreach (var property in type.GetProperties())
                 {
-                    var related = global::Blueprint.Database.Entities.BlueprintEntityTypes.GetRelatedContract(property.PropertyType);
+                    var related = global::Blueprint.Entities.BlueprintEntityTypes.GetRelatedContract(property.PropertyType);
                     if (related != null && related != property.PropertyType)
                     {
                         var listType = typeof(List<>).MakeGenericType(related);

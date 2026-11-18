@@ -1,5 +1,5 @@
 using Blueprint.Database;
-using Blueprint.Database.Entities;
+using Blueprint.Entities;
 using Blueprint.Database.Sql;
 using Blueprint.Database.TransactionFactory;
 using Blueprint.Fundamentals;

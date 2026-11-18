@@ -1,4 +1,4 @@
-using Blueprint.Database.Entities;
+using Blueprint.Entities;
 using Microsoft.EntityFrameworkCore.Metadata;
 using System.Linq.Expressions;
 

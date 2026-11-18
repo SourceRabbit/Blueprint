@@ -1,7 +1,7 @@
 using Blueprint.Database;
 using Blueprint.Database.Queries;
-using Blueprint.Database.Entities;
-using Blueprint.Database.Entities.Annotations;
+using Blueprint.Entities;
+using Blueprint.Entities.Annotations;
 using Blueprint.Database.Sql;
 using Blueprint.Database.TransactionFactory;
 using Blueprint.Fundamentals;

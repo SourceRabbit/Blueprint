@@ -1,6 +1,6 @@
 # EShop - Checkout Tutorial
 
-An entity is a public, non-sealed class that derives from `BlueprintEntityDB` or `BlueprintEntityRAM` in `Blueprint.Database.Entities` and has an `[Entity]` annotation. Blueprint generates a concrete subclass when the contract is registered.
+An entity is a public, non-sealed class that derives from `BlueprintEntityDB` or `BlueprintEntityRAM` in `Blueprint.Entities` and has an `[Entity]` annotation. Blueprint generates a concrete subclass when the contract is registered.
 
 This guide follows [EntitiesTutorial](../Visual%20Studio%20Project/Blueprint.Tests/Tutorial1/EntitiesTutorial.cs): create a website user, add one iPhone to the user's basket, and complete checkout. Checkout saves an order and its items, reduces product stock, and clears the purchased basket in one database transaction.
 
@@ -84,8 +84,8 @@ using System.Threading.Tasks;
 using Blueprint.Database.Sql;
 using Blueprint.Database.TransactionFactory;
 using Blueprint.Fundamentals;
-using Blueprint.Database.Entities.Annotations;
-using Blueprint.Database.Entities;
+using Blueprint.Entities.Annotations;
+using Blueprint.Entities;
 using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;

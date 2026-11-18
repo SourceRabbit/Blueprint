@@ -194,6 +194,8 @@ Do not rename public APIs, serialized or JSON fields, database tables or columns
 
 Applications, demos, manual examples, and consumer tests use the Entity API, such as `Product.Create()`, `Product.Where(...)`, and `Product.Insert(product)`.
 
+Use `Blueprint.Entities` for entity classes and the shared Entity API, and `Blueprint.Entities.Annotations` for their annotations. Keep the SQL persistence implementation in `Blueprint.Database.Sql`.
+
 Declare entity contracts as public, non-sealed classes derived from `BlueprintEntityDB` or `BlueprintEntityRAM`, with `[Entity]` on the class. Abstract classes with public abstract properties are supported; implemented multilingual properties require virtual accessors. Do not introduce the removed `[RAMCached]` annotation. Continue to create entity instances through the Entity API so Blueprint supplies the generated subclass. See [entity classes and migration](Database-Entities-BlueprintEntity.md).
 
 Direct `BlueprintDatabase.Create<T>()` calls belong to Blueprint's implementation. Queries and writes are accessed through the Entity API; the former `Collection<T>()` helper has been removed. Use the database for configuration and its `TransactionFactory` for transactions. See [EShop - Checkout Tutorial](Database-Tutorial-EShop-Checkout.md) and [Transactions](Database-Transactions.md).

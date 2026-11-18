@@ -1,7 +1,7 @@
 using Blueprint.Database;
 using Blueprint.Database.Queries;
-using Blueprint.Database.Entities;
-using Blueprint.Database.Entities.Annotations;
+using Blueprint.Entities;
+using Blueprint.Entities.Annotations;
 using Blueprint.Fundamentals;
 using Microsoft.EntityFrameworkCore;
 using System.Globalization;

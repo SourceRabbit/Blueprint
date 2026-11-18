@@ -1,10 +1,10 @@
-using Blueprint.Database.Entities;
+using Blueprint.Database;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 
-namespace Blueprint.Database.Entities
+namespace Blueprint.Entities
 {
     /// <summary>Provides shared query, insert, update, and delete syntax for types deriving from BlueprintEntity.</summary>
     public static class BlueprintEntityQueries

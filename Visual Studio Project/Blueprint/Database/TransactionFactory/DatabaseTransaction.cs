@@ -1,4 +1,4 @@
-using Blueprint.Database.Entities;
+using Blueprint.Entities;
 using System.Runtime.CompilerServices;
 
 namespace Blueprint.Database.TransactionFactory

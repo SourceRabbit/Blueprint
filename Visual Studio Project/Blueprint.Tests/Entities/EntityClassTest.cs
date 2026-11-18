@@ -1,6 +1,6 @@
 using Blueprint.Database;
-using Blueprint.Database.Entities;
-using Blueprint.Database.Entities.Annotations;
+using Blueprint.Entities;
+using Blueprint.Entities.Annotations;
 using Blueprint.Fundamentals;
 using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
@@ -20,7 +20,7 @@ namespace Blueprint.Tests.Entities
             using (EntityModelDatabase database = new EntityModelDatabase())
             {
                 Assert(typeof(BlueprintEntity).IsClass && typeof(BlueprintEntityDB).BaseType == typeof(BlueprintEntity) && typeof(BlueprintEntityRAM).BaseType == typeof(BlueprintEntity), "DB and RAM must be sibling entity base classes.");
-                Assert(typeof(BlueprintEntity).Assembly.GetType("Blueprint.Database.Entities.Annotations.RAMCached") == null, "The cache annotation must be removed from the public assembly.");
+                Assert(typeof(BlueprintEntity).Assembly.GetType("Blueprint.Entities.Annotations.RAMCached") == null, "The cache annotation must be removed from the public assembly.");
                 AssertThrows<ArgumentException>(() => database.RegisterEntity(typeof(BlueprintEntity)), "The common base must not be a registrable entity.");
                 AssertThrows<ArgumentException>(() => database.RegisterEntity<SealedRecord>(), "Sealed classes cannot be dynamically extended.");
                 AssertThrows<ArgumentException>(() => database.RegisterEntity<ConstructorRecord>(), "An accessible parameterless constructor is required.");
