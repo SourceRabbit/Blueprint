@@ -105,7 +105,7 @@ namespace Blueprint.Database.TransactionFactory
 
         /// <summary>Registers a synchronous check that runs after all writes and before commit.</summary>
         /// <param name="validation">A check of the final state that throws if the transaction must be rolled back.</param>
-        /// <remarks>Checks run in registration order within the same transaction and shared lock. They may query, but must not write data, modify entities, or start asynchronous work.</remarks>
+        /// <remarks>Checks run in registration order within the same transaction on its reserved context. They may query, but must not write data, modify entities, or start asynchronous work.</remarks>
         /// <exception cref="ArgumentNullException">No validation was provided.</exception>
         /// <exception cref="ArgumentException">The validation is async void.</exception>
         /// <exception cref="InvalidOperationException">The transaction has already been submitted and the call does not originate from its preparation.</exception>

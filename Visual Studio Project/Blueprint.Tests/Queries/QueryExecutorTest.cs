@@ -6,6 +6,7 @@ using Blueprint.Fundamentals;
 using Microsoft.EntityFrameworkCore;
 using System.Globalization;
 using System.Data.Common;
+using System.Reflection;
 
 namespace Blueprint.Tests.Queries
 {
@@ -53,6 +54,7 @@ namespace Blueprint.Tests.Queries
                 Assert(!ExecutorProduct.Where(product => product.Title == "Default").Select(product => product.Title).ToQueryString().Contains("[TitleFR]"), "Default-language filters and projections must remain independent of earlier translated queries.");
                 AssertThrows<ArgumentOutOfRangeException>(() => ExecutorProduct.Where(product => product.Price == 10m, 999).ToQueryString(), "Query routing must retain language validation.");
                 CheckCommands();
+                CheckConcurrentEntityQueries();
                 database.RegisterEntity<ExecutorCategory>();
                 Assert(deferred.ToQueryString() == priceSql, "A deferred query must resolve the current context after registering another entity.");
                 Assert(translated.ToQueryString().Contains("[TitleFR]"), "Recreated contexts must preserve the language of existing queries.");
@@ -65,6 +67,76 @@ namespace Blueprint.Tests.Queries
                 Assert(deferred.ToQueryString().Contains("[Price] = 10"), "Deferred queries must resolve the currently active database at execution time.");
             }
             Console.WriteLine($"Query executor translation checks passed: {getAssertionCount()} assertions.");
+        }
+
+        /// <summary>Ελέγχει αν δύο Entity queries μπορούν να μπουν ταυτόχρονα στη μετάφραση SQL, κρατώντας το πρώτο μέσα στην αξιολόγηση παραμέτρων.</summary>
+        /// <exception cref="Exception">Αποτυγχάνει έλεγχος ή ο συγχρονισμός των δύο threads.</exception>
+        private void CheckConcurrentEntityQueries()
+        {
+            using (ManualResetEventSlim firstEntered = new ManualResetEventSlim())
+            using (ManualResetEventSlim releaseFirst = new ManualResetEventSlim())
+            using (ManualResetEventSlim secondStarted = new ManualResetEventSlim())
+            using (ManualResetEventSlim secondEntered = new ManualResetEventSlim())
+            {
+                ThreadLocal<BlueprintDatabaseContext?> executingContext = (ThreadLocal<BlueprintDatabaseContext?>)typeof(BlueprintDatabase).GetField("fExecutingContext", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(BlueprintDatabase.ACTIVE_INSTANCE)!;
+                BlueprintDatabaseContext? firstContext = null;
+                BlueprintDatabaseContext? secondContext = null;
+                bool nestedContextPreserved = false;
+                bool firstContextCleared = false;
+                bool secondContextCleared = false;
+                Func<decimal> firstPrice = () =>
+                {
+                    firstContext = executingContext.Value;
+                    _ = ExecutorProduct.Create();
+                    nestedContextPreserved = ReferenceEquals(firstContext, executingContext.Value);
+                    firstEntered.Set();
+                    if (!releaseFirst.Wait(TimeSpan.FromSeconds(10)))
+                    {
+                        throw new TimeoutException("The test did not release the first Entity query.");
+                    }
+                    return 10m;
+                };
+                Func<decimal> secondPrice = () =>
+                {
+                    secondContext = executingContext.Value;
+                    secondEntered.Set();
+                    return 20m;
+                };
+                IQueryable<ExecutorProduct> firstQuery = ExecutorProduct.Where(product => product.Price == firstPrice());
+                IQueryable<ExecutorProduct> secondQuery = ExecutorProduct.Where(product => product.Price == secondPrice());
+                Task<string> first = Task.Factory.StartNew(() =>
+                {
+                    string sql = firstQuery.ToQueryString();
+                    firstContextCleared = executingContext.Value == null;
+                    return sql;
+                }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+                Task<string>? second = null;
+                try
+                {
+                    Assert(firstEntered.Wait(TimeSpan.FromSeconds(5)), "The first Entity query must enter parameter evaluation.");
+                    second = Task.Factory.StartNew(() =>
+                    {
+                        secondStarted.Set();
+                        string sql = secondQuery.ToQueryString();
+                        secondContextCleared = executingContext.Value == null;
+                        return sql;
+                    }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+                    Assert(secondStarted.Wait(TimeSpan.FromSeconds(5)), "The second thread must start its Entity query.");
+                    Assert(secondEntered.Wait(TimeSpan.FromSeconds(5)), "The second Entity query must enter while the first is still running.");
+                    Assert(second.Wait(TimeSpan.FromSeconds(5)) && !first.IsCompleted, "The second Entity query must finish before the first is released.");
+                    Assert(firstContext != null && secondContext != null && !ReferenceEquals(firstContext, secondContext), "Concurrent operations must reserve distinct contexts.");
+                    Assert(nestedContextPreserved, "Nested Entity calls must preserve the outer operation's context.");
+                }
+                finally
+                {
+                    releaseFirst.Set();
+                    Assert(first.Wait(TimeSpan.FromSeconds(5)), "The first Entity query must finish after release.");
+                    Assert(second == null || second.Wait(TimeSpan.FromSeconds(5)), "The second Entity query must finish.");
+                }
+                Assert(firstContextCleared && secondContextCleared, "Each operation must clear its thread's context before returning.");
+                Assert(first.Result.Contains("QueryExecutorProducts") && second!.Result.Contains("QueryExecutorProducts"), "Both Entity queries must produce SQL for the expected table.");
+                Console.WriteLine("Entity API concurrency check: the second query completed while the first was blocked, using a different context.");
+            }
         }
 
         /// <summary>Ελέγχει validation και κενά batches του Entity API χωρίς σύνδεση SQL.</summary>

@@ -7,10 +7,11 @@ using System.Diagnostics;
 
 namespace Blueprint.Database.Sql.RAMCache
 {
-    /// <summary>Synchronizes private snapshots of selected tables using SQL Change Tracking under the database lock.</summary>
+    /// <summary>Synchronizes private snapshots of selected tables using SQL Change Tracking under the cache lock.</summary>
     internal sealed class SqlEntityCache : IDisposable
     {
-        private readonly BlueprintDatabaseContext fContext;
+        private readonly object fSyncRoot = new();
+        private readonly BlueprintEntityTypes fEntityTypes;
         private readonly Dictionary<Type, RAMCachedTable> fRAMCachedTables = new Dictionary<Type, RAMCachedTable>();
         private readonly Timer fTimer;
         private TimeSpan fRefreshInterval;
@@ -26,93 +27,116 @@ namespace Blueprint.Database.Sql.RAMCache
         /// <exception cref="InvalidOperationException">An application transaction is active or Change Tracking is not enabled.</exception>
         internal SqlEntityCache(BlueprintDatabaseContext context, TimeSpan refreshInterval)
         {
-            fContext = context;
+            fEntityTypes = context.EntityTypes;
             fRefreshInterval = refreshInterval;
             foreach (Type contract in context.EntityTypes.GetRAMCachedContracts())
             {
                 fRAMCachedTables.Add(contract, new RAMCachedTable(context, contract));
             }
-            Refresh();
+            Refresh(context);
             fTimer = new Timer(RefreshInBackground, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
         }
 
         /// <summary>Starts periodic refresh after the database has activated and published this cache under its lock.</summary>
         internal void Start()
         {
-            fTimer.Change(fRefreshInterval, fRefreshInterval);
+            lock (fSyncRoot)
+            {
+                fTimer.Change(fRefreshInterval, fRefreshInterval);
+            }
         }
 
         /// <summary>Finds a cached table while preserving SQL reads inside application transactions.</summary>
         /// <param name="contract">The registered entity class.</param>
+        /// <param name="context">The context reserved for the current operation.</param>
         /// <returns>The table, or null when no cached read is allowed.</returns>
-        internal RAMCachedTable? GetTable(Type contract)
+        internal RAMCachedTable? GetTable(Type contract, BlueprintDatabaseContext context)
         {
-            if (fIsDisposed || fContext.Database.CurrentTransaction != null || System.Transactions.Transaction.Current != null || !fRAMCachedTables.TryGetValue(contract, out RAMCachedTable? table))
+            lock (fSyncRoot)
             {
-                return null;
+                if (fIsDisposed || context.Database.CurrentTransaction != null || System.Transactions.Transaction.Current != null || !fRAMCachedTables.TryGetValue(contract, out RAMCachedTable? table))
+                {
+                    return null;
+                }
+                return table;
             }
-            return table;
         }
 
-        /// <summary>Refreshes invalidated or expired snapshots before a supported cached read under the database lock.</summary>
+        /// <summary>Refreshes invalidated or expired snapshots before a supported cached read under the cache lock.</summary>
+        /// <param name="context">The context reserved for the current operation.</param>
         /// <exception cref="DbException">Required synchronization fails.</exception>
         /// <exception cref="InvalidOperationException">Change Tracking is unavailable or a transaction is active.</exception>
-        internal void Synchronize()
+        internal void Synchronize(BlueprintDatabaseContext context)
         {
-            if (fNeedsRefresh || Stopwatch.GetElapsedTime(fLastRefresh) >= fRefreshInterval)
+            lock (fSyncRoot)
             {
-                Refresh();
+                if (fNeedsRefresh || Stopwatch.GetElapsedTime(fLastRefresh) >= fRefreshInterval)
+                {
+                    Refresh(context);
+                }
             }
         }
 
         /// <summary>Requests synchronization before the next read following a write.</summary>
         internal void Invalidate()
         {
-            fNeedsRefresh = true;
+            lock (fSyncRoot)
+            {
+                fNeedsRefresh = true;
+            }
         }
 
         /// <summary>Changes the timer interval without losing already loaded data.</summary>
         /// <param name="refreshInterval">The validated new interval.</param>
         internal void setRefreshInterval(TimeSpan refreshInterval)
         {
-            fRefreshInterval = refreshInterval;
-            fTimer.Change(refreshInterval, refreshInterval);
+            lock (fSyncRoot)
+            {
+                fRefreshInterval = refreshInterval;
+                fTimer.Change(refreshInterval, refreshInterval);
+            }
         }
 
         /// <summary>Reads the version, valid history, and data in one snapshot transaction and publishes after commit.</summary>
+        /// <param name="context">The context reserved for the snapshot transaction.</param>
         /// <exception cref="InvalidOperationException">An application transaction is active or Change Tracking is not enabled.</exception>
         /// <exception cref="DbException">Synchronization fails without publishing partial results.</exception>
-        internal void Refresh()
+        internal void Refresh(BlueprintDatabaseContext context)
         {
-            if (fContext.Database.CurrentTransaction != null || System.Transactions.Transaction.Current != null)
+            lock (fSyncRoot)
             {
-                throw new InvalidOperationException("RAM cache synchronization cannot run inside an application transaction.");
+                if (context.Database.CurrentTransaction != null || System.Transactions.Transaction.Current != null)
+                {
+                    throw new InvalidOperationException("RAM cache synchronization cannot run inside an application transaction.");
+                }
+                if (fIsDisposed || fRAMCachedTables.Count == 0)
+                {
+                    return;
+                }
+                fNeedsRefresh = true;
+                using (IDbContextTransaction transaction = context.Database.BeginTransaction(IsolationLevel.Snapshot))
+                using (DbCommand command = SqlSchemaInitializer.CreateCommand(context, "SELECT CHANGE_TRACKING_CURRENT_VERSION();"))
+                {
+                    object? versionValue = command.ExecuteScalar();
+                    if (versionValue is not long version)
+                    {
+                        throw new InvalidOperationException("SQL Server Change Tracking must remain enabled while RAMCached entities are in use.");
+                    }
+                    List<(RAMCachedTable Table, Dictionary<long, BlueprintEntity> Rows, long BeginVersion, int ObjectID)> snapshots = new List<(RAMCachedTable, Dictionary<long, BlueprintEntity>, long, int)>();
+                    foreach (RAMCachedTable table in fRAMCachedTables.Values)
+                    {
+                        (Dictionary<long, BlueprintEntity> rows, long beginVersion, int objectID) = table.ReadSnapshot(context, version);
+                        snapshots.Add((table, rows, beginVersion, objectID));
+                    }
+                    transaction.Commit();
+                    foreach ((RAMCachedTable table, Dictionary<long, BlueprintEntity> rows, long beginVersion, int objectID) in snapshots)
+                    {
+                        table.Publish(rows, version, beginVersion, objectID);
+                    }
+                }
+                fLastRefresh = Stopwatch.GetTimestamp();
+                fNeedsRefresh = false;
             }
-            if (fIsDisposed || fRAMCachedTables.Count == 0)
-            {
-                return;
-            }
-            fNeedsRefresh = true;
-            using IDbContextTransaction transaction = fContext.Database.BeginTransaction(IsolationLevel.Snapshot);
-            using DbCommand command = SqlSchemaInitializer.CreateCommand(fContext, "SELECT CHANGE_TRACKING_CURRENT_VERSION();");
-            object? versionValue = command.ExecuteScalar();
-            if (versionValue is not long version)
-            {
-                throw new InvalidOperationException("SQL Server Change Tracking must remain enabled while RAMCached entities are in use.");
-            }
-            List<(RAMCachedTable Table, Dictionary<long, BlueprintEntity> Rows, long BeginVersion, int ObjectID)> snapshots = new List<(RAMCachedTable, Dictionary<long, BlueprintEntity>, long, int)>();
-            foreach (RAMCachedTable table in fRAMCachedTables.Values)
-            {
-                (Dictionary<long, BlueprintEntity> rows, long beginVersion, int objectID) = table.ReadSnapshot(version);
-                snapshots.Add((table, rows, beginVersion, objectID));
-            }
-            transaction.Commit();
-            foreach ((RAMCachedTable table, Dictionary<long, BlueprintEntity> rows, long beginVersion, int objectID) in snapshots)
-            {
-                table.Publish(rows, version, beginVersion, objectID);
-            }
-            fLastRefresh = Stopwatch.GetTimestamp();
-            fNeedsRefresh = false;
         }
 
         /// <summary>Checks external changes without concurrent context use and requires the reader to retry after failure.</summary>
@@ -131,26 +155,30 @@ namespace Blueprint.Database.Sql.RAMCache
                     // Disposal may clear the active instance before an already queued callback starts.
                     return;
                 }
-                database.ExecuteOperation(context =>
+                // Coordinate the timer with initialization and disposal without serializing consumer operations.
+                lock (database.SyncRoot)
                 {
-                    if (!fIsDisposed && ReferenceEquals(context, fContext))
+                    database.ExecuteOperation(context =>
                     {
-                        try
+                        if (ReferenceEquals(context.EntityTypes, fEntityTypes))
                         {
-                            Refresh();
+                            try
+                            {
+                                Refresh(context);
+                            }
+                            catch (Exception)
+                            {
+                                // The next read retries the check and receives the exception instead of silently returning stale data.
+                                Invalidate();
+                            }
                         }
-                        catch (Exception)
-                        {
-                            // The next read retries the check and receives the exception instead of silently returning stale data.
-                            fNeedsRefresh = true;
-                        }
-                    }
-                    return 0;
-                });
+                        return 0;
+                    });
+                }
             }
             catch (ObjectDisposedException)
             {
-                // A callback that waited for the lock may arrive after Shutdown.
+                // A callback waiting for a pooled context may arrive after disposal.
             }
             finally
             {
@@ -158,12 +186,15 @@ namespace Blueprint.Database.Sql.RAMCache
             }
         }
 
-        /// <summary>Stops new checks and releases snapshots under the database lock.</summary>
+        /// <summary>Stops new checks and releases snapshots under the cache lock.</summary>
         public void Dispose()
         {
-            fIsDisposed = true;
-            fTimer.Dispose();
-            fRAMCachedTables.Clear();
+            lock (fSyncRoot)
+            {
+                fIsDisposed = true;
+                fTimer.Dispose();
+                fRAMCachedTables.Clear();
+            }
         }
     }
 }

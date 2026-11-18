@@ -12,7 +12,7 @@ namespace Blueprint.Database.Sql.RAMCache
     /// <summary>Stores a table's committed scalar values and corresponding synchronization position.</summary>
     internal sealed class RAMCachedTable
     {
-        private readonly BlueprintDatabaseContext fContext;
+        private readonly object fSyncRoot = new();
         private readonly Type fConcreteType;
         private readonly IProperty[] fProperties;
         private readonly Dictionary<IProperty, ILookup<object?, BlueprintEntity>> fForeignKeyIndexes = new Dictionary<IProperty, ILookup<object?, BlueprintEntity>>();
@@ -29,7 +29,6 @@ namespace Blueprint.Database.Sql.RAMCache
         /// <param name="contract">The RAM entity class.</param>
         internal RAMCachedTable(BlueprintDatabaseContext context, Type contract)
         {
-            fContext = context;
             fConcreteType = context.EntityTypes.Types[contract];
             IEntityType entityType = context.Model.FindEntityType(fConcreteType)!;
             fProperties = entityType.GetProperties().ToArray();
@@ -41,43 +40,48 @@ namespace Blueprint.Database.Sql.RAMCache
         }
 
         /// <summary>Prepares a new snapshot using a delta or a full reload when the previous version is no longer valid.</summary>
+        /// <param name="context">The context reserved for the snapshot transaction.</param>
         /// <param name="version">The version of the current snapshot transaction.</param>
         /// <returns>The new data and the identity of the active history.</returns>
         /// <exception cref="InvalidOperationException">Change Tracking is not enabled on the selected table.</exception>
-        internal (Dictionary<long, BlueprintEntity> Rows, long BeginVersion, int ObjectID) ReadSnapshot(long version)
+        internal (Dictionary<long, BlueprintEntity> Rows, long BeginVersion, int ObjectID) ReadSnapshot(BlueprintDatabaseContext context, long version)
         {
             long minimumVersion;
             long beginVersion;
             int objectID;
-            using (DbCommand command = SqlSchemaInitializer.CreateCommand(fContext, "SELECT CHANGE_TRACKING_MIN_VALID_VERSION(object_id), begin_version, object_id FROM sys.change_tracking_tables WHERE object_id = OBJECT_ID(@table);"))
+            using (DbCommand command = SqlSchemaInitializer.CreateCommand(context, "SELECT CHANGE_TRACKING_MIN_VALID_VERSION(object_id), begin_version, object_id FROM sys.change_tracking_tables WHERE object_id = OBJECT_ID(@table);"))
             {
                 command.Parameters.Add(new SqlParameter("@table", fTableName));
-                using DbDataReader reader = command.ExecuteReader();
-                if (!reader.Read() || reader.IsDBNull(0) || reader.IsDBNull(1))
+                using (DbDataReader reader = command.ExecuteReader())
                 {
-                    throw new InvalidOperationException($"Change Tracking is unavailable for RAMCached table '{fTableName}'. Enable it and grant SELECT and VIEW CHANGE TRACKING permissions.");
+                    if (!reader.Read() || reader.IsDBNull(0) || reader.IsDBNull(1))
+                    {
+                        throw new InvalidOperationException($"Change Tracking is unavailable for RAMCached table '{fTableName}'. Enable it and grant SELECT and VIEW CHANGE TRACKING permissions.");
+                    }
+                    minimumVersion = reader.GetInt64(0);
+                    beginVersion = reader.GetInt64(1);
+                    objectID = reader.GetInt32(2);
                 }
-                minimumVersion = reader.GetInt64(0);
-                beginVersion = reader.GetInt64(1);
-                objectID = reader.GetInt32(2);
             }
             // TRUNCATE or re-enabling tracking may retain the same version if no tracked DML occurred in between.
             if (!fVersion.HasValue || fVersion.Value <= minimumVersion || fVersion.Value > version || fBeginVersion != beginVersion || fObjectID != objectID)
             {
-                return (fReadRows(fContext, $"SELECT * FROM {fTableName}", Array.Empty<object>()).ToDictionary(entity => entity.ID), beginVersion, objectID);
+                return (fReadRows(context, $"SELECT * FROM {fTableName}", Array.Empty<object>()).ToDictionary(entity => entity.ID), beginVersion, objectID);
             }
             if (fVersion.Value == version)
             {
                 return (fRows, beginVersion, objectID);
             }
             List<long> changedIDs = new List<long>();
-            using (DbCommand command = SqlSchemaInitializer.CreateCommand(fContext, $"SELECT {fKeyColumn} FROM CHANGETABLE(CHANGES {fTableName}, @cacheVersion) AS changes;"))
+            using (DbCommand command = SqlSchemaInitializer.CreateCommand(context, $"SELECT {fKeyColumn} FROM CHANGETABLE(CHANGES {fTableName}, @cacheVersion) AS changes;"))
             {
                 command.Parameters.Add(new SqlParameter("@cacheVersion", fVersion.Value));
-                using DbDataReader reader = command.ExecuteReader();
-                while (reader.Read())
+                using (DbDataReader reader = command.ExecuteReader())
                 {
-                    changedIDs.Add(reader.GetInt64(0));
+                    while (reader.Read())
+                    {
+                        changedIDs.Add(reader.GetInt64(0));
+                    }
                 }
             }
             if (changedIDs.Count == 0)
@@ -90,7 +94,7 @@ namespace Blueprint.Database.Sql.RAMCache
                 rows.Remove(id);
             }
             string sql = $"SELECT source.* FROM {fTableName} AS source INNER JOIN CHANGETABLE(CHANGES {fTableName}, @cacheVersion) AS changes ON source.{fKeyColumn} = changes.{fKeyColumn}";
-            foreach (BlueprintEntity entity in fReadRows(fContext, sql, new object[] { new SqlParameter("@cacheVersion", fVersion.Value) }))
+            foreach (BlueprintEntity entity in fReadRows(context, sql, new object[] { new SqlParameter("@cacheVersion", fVersion.Value) }))
             {
                 rows[entity.ID] = entity;
             }
@@ -104,14 +108,17 @@ namespace Blueprint.Database.Sql.RAMCache
         /// <param name="objectID">The SQL table identity.</param>
         internal void Publish(Dictionary<long, BlueprintEntity> rows, long version, long beginVersion, int objectID)
         {
-            if (!ReferenceEquals(fRows, rows))
+            lock (fSyncRoot)
             {
-                fForeignKeyIndexes.Clear();
+                if (!ReferenceEquals(fRows, rows))
+                {
+                    fForeignKeyIndexes.Clear();
+                }
+                fRows = rows;
+                fVersion = version;
+                fBeginVersion = beginVersion;
+                fObjectID = objectID;
             }
-            fRows = rows;
-            fVersion = version;
-            fBeginVersion = beginVersion;
-            fObjectID = objectID;
         }
 
         /// <summary>Copies only mapped scalar values without exposing the shared cached instance.</summary>
@@ -137,22 +144,27 @@ namespace Blueprint.Database.Sql.RAMCache
         /// <returns>Shared scalar rows that the executor must copy before returning.</returns>
         internal IEnumerable<BlueprintEntity> GetRelatedRows(IProperty key, long[] ids)
         {
-            foreach (long id in ids)
+            lock (fSyncRoot)
             {
-                if (key.Name == nameof(BlueprintEntity.ID))
+                List<BlueprintEntity> rows = new List<BlueprintEntity>();
+                foreach (long id in ids)
                 {
-                    if (fRows.TryGetValue(id, out BlueprintEntity? entity))
+                    if (key.Name == nameof(BlueprintEntity.ID))
                     {
-                        yield return entity;
+                        if (fRows.TryGetValue(id, out BlueprintEntity? entity))
+                        {
+                            rows.Add(entity);
+                        }
+                    }
+                    else
+                    {
+                        foreach (BlueprintEntity entity in GetReferencingRows(key, id))
+                        {
+                            rows.Add(entity);
+                        }
                     }
                 }
-                else
-                {
-                    foreach (BlueprintEntity entity in GetReferencingRows(key, id))
-                    {
-                        yield return entity;
-                    }
-                }
+                return rows;
             }
         }
 
@@ -199,12 +211,15 @@ namespace Blueprint.Database.Sql.RAMCache
             }
         }
 
-        /// <summary>The shared snapshot, accessible only under the database lock and never exposed to consumers.</summary>
+        /// <summary>The current immutable row dictionary, safe to enumerate after a newer snapshot is published.</summary>
         internal IReadOnlyDictionary<long, BlueprintEntity> Rows
         {
             get
             {
-                return fRows;
+                lock (fSyncRoot)
+                {
+                    return fRows;
+                }
             }
         }
     }

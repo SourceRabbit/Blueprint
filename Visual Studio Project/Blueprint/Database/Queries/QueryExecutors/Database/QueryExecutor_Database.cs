@@ -17,7 +17,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.Database
 
         /// <summary>Executes the terminal expression through EF Core and restores the language even on failure.</summary>
         /// <typeparam name="TResult">The result type.</typeparam>
-        /// <param name="context">The active context, with the database lock already held.</param>
+        /// <param name="context">The context reserved for this operation.</param>
         /// <param name="expression">The complete terminal expression.</param>
         /// <param name="result">The result returned by the EF provider.</param>
         /// <returns>True after successful execution. Failures propagate as exceptions.</returns>
@@ -42,9 +42,9 @@ namespace Blueprint.Database.Queries.QueryExecutors.Database
             }
         }
 
-        /// <summary>Materializes results through EF Core before releasing the lock and restores the language.</summary>
+        /// <summary>Materializes results through EF Core before returning the context to the pool and restores the language.</summary>
         /// <typeparam name="TElement">The type of each result.</typeparam>
-        /// <param name="context">The active context, with the database lock already held.</param>
+        /// <param name="context">The context reserved for this operation.</param>
         /// <param name="expression">The complete sequence expression.</param>
         /// <param name="items">The result list returned by the EF provider.</param>
         /// <returns>True after successful materialization. Failures propagate as exceptions.</returns>

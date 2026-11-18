@@ -66,7 +66,7 @@ namespace Blueprint.Database.Sql
                 throw new ArgumentOutOfRangeException(nameof(commandTimeoutSeconds), "The command timeout must be nonnegative.");
             }
 
-            if (Monitor.IsEntered(fSyncRoot) || System.Transactions.Transaction.Current != null)
+            if (IsExecutingOperation || Monitor.IsEntered(fSyncRoot) || System.Transactions.Transaction.Current != null)
             {
                 throw new InvalidOperationException("Execute standalone SQL outside an existing database operation or TransactionScope.");
             }
@@ -194,17 +194,19 @@ namespace Blueprint.Database.Sql
 
         /// <summary>Finds a cached entity table when the current transaction permits cached reads.</summary>
         /// <param name="contract">The registered entity class.</param>
+        /// <param name="context">The context reserved for the current operation.</param>
         /// <returns>The cached table, or null when SQL is required.</returns>
-        internal override RAMCachedTable? GetCachedTable(Type contract)
+        internal override RAMCachedTable? GetCachedTable(Type contract, BlueprintDatabaseContext context)
         {
-            return fRAMCache?.GetTable(contract);
+            return fRAMCache?.GetTable(contract, context);
         }
 
         /// <summary>Refreshes invalidated or expired snapshots before executing a supported RAM query.</summary>
+        /// <param name="context">The context reserved for the current query.</param>
         /// <exception cref="Exception">Required cache synchronization fails.</exception>
-        internal override void SynchronizeCache()
+        internal override void SynchronizeCache(BlueprintDatabaseContext context)
         {
-            fRAMCache?.Synchronize();
+            fRAMCache?.Synchronize(context);
         }
 
         /// <summary>Requires cache synchronization after a write, including potential trigger changes.</summary>

@@ -31,6 +31,7 @@ namespace Blueprint.Tests.Lifecycle
         {
             ResetAssertions();
             CheckDatabaseLifecycle();
+            CheckContextPool();
             CheckConcurrentActivation();
             CheckTransactionLifecycle();
             CheckDatabaseDisposal();
@@ -91,7 +92,85 @@ namespace Blueprint.Tests.Lifecycle
             }
         }
 
-        /// <summary>Ελέγχει το κοινό lock, την ακύρωση και τη μοναδική υποβολή των transactions χωρίς σύνδεση SQL.</summary>
+        /// <summary>Ελέγχει τις πέντε θέσεις, την αναμονή έκτου caller και την επιστροφή μέσω Dispose και DisposeAsync.</summary>
+        /// <exception cref="Exception">Αποτυγχάνει έλεγχος του pool ή ο συγχρονισμός των threads.</exception>
+        private void CheckContextPool()
+        {
+            using (ModelDatabase database = new ModelDatabase(CreateLanguages()))
+            using (ManualResetEventSlim started = new ManualResetEventSlim())
+            using (ManualResetEventSlim acquired = new ManualResetEventSlim())
+            using (ManualResetEventSlim finish = new ManualResetEventSlim())
+            {
+                database.RegisterEntity<LifecycleRecord>();
+                LifecycleRecord record = LifecycleRecord.Create();
+                record.ID = 42;
+                BlueprintDatabaseContext[] contexts = new BlueprintDatabaseContext[5];
+                Task? waiter = null;
+                bool thirdReturned = false;
+                bool reusedReturnedContext = false;
+                bool trackingWasCleared = false;
+                try
+                {
+                    for (int index = 0; index < contexts.Length; index++)
+                    {
+                        contexts[index] = database.GetContext();
+                    }
+                    Assert(contexts.Distinct().Count() == 5, "The pool must provide five different reserved contexts.");
+                    contexts[2].Attach(record);
+                    Assert(contexts[2].ChangeTracker.Entries().Any(), "The reserved context must track its own entities.");
+                    waiter = Task.Run(() =>
+                    {
+                        started.Set();
+                        using (BlueprintDatabaseContext context = database.GetContext())
+                        {
+                            reusedReturnedContext = ReferenceEquals(context, contexts[2]);
+                            trackingWasCleared = !context.ChangeTracker.Entries().Any();
+                            acquired.Set();
+                            if (!finish.Wait(TimeSpan.FromSeconds(10)))
+                            {
+                                throw new TimeoutException("The test did not release the sixth caller.");
+                            }
+                        }
+                    });
+                    Assert(started.Wait(TimeSpan.FromSeconds(5)), "The sixth caller must start.");
+                    Assert(!acquired.Wait(TimeSpan.FromMilliseconds(100)), "The sixth caller must wait while all five contexts are reserved.");
+                    contexts[2].Dispose();
+                    thirdReturned = true;
+                    Assert(acquired.Wait(TimeSpan.FromSeconds(5)), "Returning one context must wake the waiting caller.");
+                    Assert(reusedReturnedContext && trackingWasCleared, "The waiting caller must receive the returned context with empty tracking.");
+                }
+                finally
+                {
+                    finish.Set();
+                    for (int index = 0; index < contexts.Length; index++)
+                    {
+                        if (index != 2 || !thirdReturned)
+                        {
+                            contexts[index]?.Dispose();
+                        }
+                    }
+                    Assert(waiter == null || waiter.Wait(TimeSpan.FromSeconds(5)), "The waiting caller must return its context.");
+                }
+                BlueprintDatabaseContext asyncContext = database.GetContext();
+                asyncContext.DisposeAsync().GetAwaiter().GetResult();
+                using (BlueprintDatabaseContext reused = database.GetContext())
+                {
+                    Assert(ReferenceEquals(asyncContext, reused), "DisposeAsync must return the same reusable instance to the pool.");
+                }
+                for (int index = 0; index < 10; index++)
+                {
+                    AssertThrows<ArgumentException>(() => LifecycleRecord.Update(new LifecycleRecord[] { null! }), "Failed entity operations must not leak pool entries.");
+                    Assert(LifecycleRecord.Create().CurrentLanguage == 7, "Entity operations must continue to acquire and return contexts.");
+                }
+                database.RegisterEntity<LifecycleRecord>();
+                using (BlueprintDatabaseContext context = database.GetContext())
+                {
+                    Assert(context.Model.GetEntityTypes().Any(), "Schema synchronization must leave an initialized pool.");
+                }
+            }
+        }
+
+        /// <summary>Ελέγχει τους περιορισμούς nested υποβολής, την ακύρωση και τη μοναδική υποβολή transactions χωρίς σύνδεση SQL.</summary>
         /// <exception cref="Exception">Αποτυγχάνει έλεγχος ασφάλειας transaction.</exception>
         private void CheckTransactionLifecycle()
         {
@@ -130,11 +209,11 @@ namespace Blueprint.Tests.Lifecycle
                             submitted.Set();
                         });
                         Assert(submitted.Wait(TimeSpan.FromSeconds(5)), "Transaction submission must reach the worker queue.");
-                        Assert(!SpinWait.SpinUntil(() => execution!.IsCompleted, TimeSpan.FromMilliseconds(100)), "The transaction worker must wait for the database lock, even before handling cancellation.");
+                        Assert(SpinWait.SpinUntil(() => execution!.IsCompleted, TimeSpan.FromSeconds(5)), "A cancelled transaction must finish without waiting for the initialization lock.");
                     });
                     Assert(submission!.Wait(TimeSpan.FromSeconds(5)), "Transaction submission must finish.");
                     Assert(SpinWait.SpinUntil(() => execution!.IsCompleted, TimeSpan.FromSeconds(5)), "The transaction worker must finish after the database lock is released.");
-                    AssertThrows<OperationCanceledException>(() => execution!.GetAwaiter().GetResult(), "The queued transaction must observe cancellation after acquiring the lock.");
+                    AssertThrows<OperationCanceledException>(() => execution!.GetAwaiter().GetResult(), "The queued transaction must observe cancellation without acquiring the initialization lock.");
                     Assert(queued.IsCompleted && !queued.IsCommitted, "The queued cancelled transaction must publish its completion.");
                 }
             }
@@ -190,8 +269,11 @@ namespace Blueprint.Tests.Lifecycle
             IDisposable cache;
             using (ModelDatabase database = new ModelDatabase(CreateLanguages()))
             {
-                BlueprintDatabaseContext context = BlueprintDatabase.ACTIVE_INSTANCE.Context;
-                using (cache = (IDisposable)Activator.CreateInstance(cacheType, BindingFlags.Instance | BindingFlags.NonPublic, null, new object[] { context, TimeSpan.FromHours(1) }, null)!)
+                using (BlueprintDatabaseContext context = BlueprintDatabase.ACTIVE_INSTANCE.GetContext())
+                {
+                    cache = (IDisposable)Activator.CreateInstance(cacheType, BindingFlags.Instance | BindingFlags.NonPublic, null, new object[] { context, TimeSpan.FromHours(1) }, null)!;
+                }
+                using (cache)
                 {
                     refresh.Invoke(cache, new object?[] { null });
                 }
@@ -406,7 +488,7 @@ namespace Blueprint.Tests.Lifecycle
                 }
             }
 
-            /// <summary>Εκτελεί έναν έλεγχο κρατώντας το ίδιο lock που προστατεύει τις λειτουργίες της βάσης.</summary>
+            /// <summary>Εκτελεί έναν έλεγχο κρατώντας το lock αρχικοποίησης και disposal της βάσης.</summary>
             /// <param name="action">Ο έλεγχος που θα εκτελεστεί με αποκλειστική πρόσβαση.</param>
             /// <exception cref="Exception">Αποτυγχάνει ο δοσμένος έλεγχος.</exception>
             internal void RunUnderLock(Action action)

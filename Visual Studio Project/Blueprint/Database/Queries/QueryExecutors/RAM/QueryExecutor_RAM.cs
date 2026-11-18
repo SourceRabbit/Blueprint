@@ -24,7 +24,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
 
         /// <summary>Tries count and single-entity optimizations before general execution against the cache.</summary>
         /// <typeparam name="TResult">The result type.</typeparam>
-        /// <param name="context">The active context, with the database lock already held.</param>
+        /// <param name="context">The context reserved for this operation.</param>
         /// <param name="expression">The complete terminal expression.</param>
         /// <param name="result">The cached result when the query is supported.</param>
         /// <returns>True after successful RAM execution or SQL fallback, including null, zero, and empty results.</returns>
@@ -53,7 +53,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
 
         /// <summary>Tries row selection and projection optimizations before general execution on independent cached copies.</summary>
         /// <typeparam name="TElement">The type of each result.</typeparam>
-        /// <param name="context">The active context, with the database lock already held.</param>
+        /// <param name="context">The context reserved for this operation.</param>
         /// <param name="expression">The complete sequence expression.</param>
         /// <param name="items">The independent results when the cache supports the query.</param>
         /// <returns>True after successful RAM execution or SQL fallback, including null, zero, and empty results.</returns>
@@ -62,7 +62,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
         {
             items = null;
             bool includeRelated = typeof(BlueprintEntity).IsAssignableFrom(typeof(TElement));
-            RAMCachedTable? table = GetTable(expression, includeRelated);
+            RAMCachedTable? table = GetTable(context, expression, includeRelated);
             if (table == null)
             {
                 return fDatabaseExecutor.TryExecuteList(context, expression, out items);
@@ -88,46 +88,47 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
         /// <exception cref="Exception">Cache synchronization or SQL execution fails.</exception>
         internal override List<BlueprintEntity> ReadRelated(BlueprintDatabaseContext context, IProperty key, long[] ids)
         {
-            RAMCachedTable? table = BlueprintDatabase.ACTIVE_INSTANCE.GetCachedTable(fContract);
+            RAMCachedTable? table = BlueprintDatabase.ACTIVE_INSTANCE.GetCachedTable(fContract, context);
             if (table == null)
             {
                 return fDatabaseExecutor.ReadRelated(context, key, ids);
             }
-            BlueprintDatabase.ACTIVE_INSTANCE.SynchronizeCache();
+            BlueprintDatabase.ACTIVE_INSTANCE.SynchronizeCache(context);
             return table.GetRelatedRows(key, ids).Select(row => table.Copy(row, fLanguage)).ToList();
         }
 
         /// <summary>Selects a cached table only when the complete query can execute safely in RAM.</summary>
+        /// <param name="context">The context reserved for the current query.</param>
         /// <param name="expression">The complete query expression.</param>
         /// <param name="includeRelated">Whether entity results require automatic relationships.</param>
         /// <returns>The synchronized table, or null when SQL is required.</returns>
         /// <exception cref="Exception">Required cache synchronization fails.</exception>
-        private RAMCachedTable? GetTable(Expression expression, bool includeRelated)
+        private RAMCachedTable? GetTable(BlueprintDatabaseContext context, Expression expression, bool includeRelated)
         {
-            RAMCachedTable? table = BlueprintDatabase.ACTIVE_INSTANCE.GetCachedTable(fContract);
+            RAMCachedTable? table = BlueprintDatabase.ACTIVE_INSTANCE.GetCachedTable(fContract, context);
             if (table == null || !CachedQueryEligibility.CanExecute(fContract, expression, fProvider, includeRelated))
             {
                 return null;
             }
-            BlueprintDatabase.ACTIVE_INSTANCE.SynchronizeCache();
+            BlueprintDatabase.ACTIVE_INSTANCE.SynchronizeCache(context);
             return table;
         }
 
         /// <summary>Creates a safe LINQ source from cached roots and relationships loaded through their own executors.</summary>
-        /// <param name="context">The current context under the database lock.</param>
+        /// <param name="context">The current context using the reserved context.</param>
         /// <param name="expression">The complete query expression.</param>
         /// <param name="includeRelated">Whether entity results require automatic relationships.</param>
         /// <returns>A query over independent copies, or null when SQL is required.</returns>
         /// <exception cref="Exception">Required cache synchronization or copying fails.</exception>
         private IQueryable? GetQuery(BlueprintDatabaseContext context, Expression expression, bool includeRelated)
         {
-            RAMCachedTable? table = GetTable(expression, includeRelated);
+            RAMCachedTable? table = GetTable(context, expression, includeRelated);
             return table == null ? null : CreateQuery(table, context);
         }
 
         /// <summary>Returns the count or evaluates safe filters on existing objects without copying or changing the language.</summary>
         /// <param name="expression">The terminal Count or LongCount expression.</param>
-        /// <param name="context">The active context, with the database lock already held.</param>
+        /// <param name="context">The context reserved for this operation.</param>
         /// <param name="count">The result as an int or long when counting completes.</param>
         /// <returns>True if safe counting without copies is supported.</returns>
         private bool TryExecuteCount(BlueprintDatabaseContext context, Expression expression, out object? count)
@@ -137,7 +138,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
             {
                 return false;
             }
-            RAMCachedTable? table = GetTable(expression, false);
+            RAMCachedTable? table = GetTable(context, expression, false);
             if (table == null)
             {
                 return false;
@@ -202,7 +203,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
 
         /// <summary>Evaluates safe First and Single operations on shared rows and copies only the selected entity.</summary>
         /// <param name="expression">A supported terminal expression with an optional predicate.</param>
-        /// <param name="context">The active context, with the database lock already held.</param>
+        /// <param name="context">The context reserved for this operation.</param>
         /// <param name="element">The independent result, or null for an empty OrDefault operation.</param>
         /// <returns>True if selection can execute without exposing shared entities.</returns>
         /// <exception cref="InvalidOperationException">First or Single has no match, or Single has multiple matches.</exception>
@@ -217,7 +218,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
             {
                 return false;
             }
-            RAMCachedTable? table = GetTable(expression, true);
+            RAMCachedTable? table = GetTable(context, expression, true);
             if (table == null)
             {
                 return false;
@@ -257,7 +258,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
         /// <typeparam name="TElement">The entity class.</typeparam>
         /// <param name="table">The synchronized table snapshot.</param>
         /// <param name="expression">The complete entity sequence, with or without paging.</param>
-        /// <param name="context">The active context, with the database lock already held.</param>
+        /// <param name="context">The context reserved for this operation.</param>
         /// <param name="items">The independent result copies when the query executes.</param>
         /// <returns>True if the results may be selected from shared objects.</returns>
         private bool TryExecutePage<TElement>(RAMCachedTable table, BlueprintDatabaseContext context, Expression expression, out List<TElement>? items)
@@ -359,7 +360,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
         /// <typeparam name="TElement">The projected result type.</typeparam>
         /// <param name="table">The synchronized table snapshot.</param>
         /// <param name="expression">The complete projected sequence.</param>
-        /// <param name="context">The active context, with the database lock already held.</param>
+        /// <param name="context">The context reserved for this operation.</param>
         /// <param name="items">The independent projected results when execution succeeds.</param>
         /// <returns>True if the projection can execute without exposing mutable cached values.</returns>
         private bool TryExecuteProjection<TElement>(RAMCachedTable table, BlueprintDatabaseContext context, Expression expression, out List<TElement>? items)
@@ -380,9 +381,10 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
         /// <returns>A LINQ query over independent instances of the public entity class.</returns>
         private IQueryable CreateQuery(RAMCachedTable table, BlueprintDatabaseContext context)
         {
-            Array entities = Array.CreateInstance(fContract, table.Rows.Count);
+            IReadOnlyDictionary<long, BlueprintEntity> rows = table.Rows;
+            Array entities = Array.CreateInstance(fContract, rows.Count);
             int index = 0;
-            foreach (BlueprintEntity stored in table.Rows.Values)
+            foreach (BlueprintEntity stored in rows.Values)
             {
                 entities.SetValue(table.Copy(stored, fLanguage), index++);
             }

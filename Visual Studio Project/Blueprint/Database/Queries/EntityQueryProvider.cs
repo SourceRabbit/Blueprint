@@ -4,7 +4,7 @@ using Blueprint.Database.Queries.QueryExecutors;
 
 namespace Blueprint.Database.Queries
 {
-    /// <summary>Preserves LINQ composition and delegates execution to RAM cache or SQL executors under the database lock.</summary>
+    /// <summary>Preserves LINQ composition and delegates execution to RAM cache or SQL executors using the reserved context.</summary>
     internal sealed class EntityQueryProvider : IQueryProvider
     {
         private readonly long fLanguage;
@@ -37,7 +37,7 @@ namespace Blueprint.Database.Queries
             return (IQueryable)Activator.CreateInstance(typeof(EntityQuery<>).MakeGenericType(queryType.GetGenericArguments()[0]), BindingFlags.NonPublic | BindingFlags.Instance, null, new object[] { this, expression }, null)!;
         }
 
-        /// <summary>Delegates a terminal LINQ operation to the entity's executor under the database lock.</summary>
+        /// <summary>Delegates a terminal LINQ operation to the entity's executor using the reserved context.</summary>
         /// <typeparam name="TResult">The result type.</typeparam>
         /// <param name="expression">The complete expression.</param>
         /// <returns>The result from the cache or database.</returns>
@@ -63,7 +63,7 @@ namespace Blueprint.Database.Queries
             return Execute<object?>(expression);
         }
 
-        /// <summary>Delegates list materialization to the entity's executor while holding the database lock.</summary>
+        /// <summary>Delegates list materialization to the entity's executor using the reserved context.</summary>
         /// <typeparam name="TElement">The type of each result.</typeparam>
         /// <param name="expression">The complete query.</param>
         /// <returns>The results from the cache or database.</returns>

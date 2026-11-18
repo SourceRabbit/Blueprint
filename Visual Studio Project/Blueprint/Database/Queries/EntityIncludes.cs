@@ -14,7 +14,7 @@ namespace Blueprint.Database.Queries
         private readonly Dictionary<(Type, long), BlueprintEntity> fEntities = new Dictionary<(Type, long), BlueprintEntity>();
 
         /// <summary>Creates one identity scope for a materialized result graph.</summary>
-        /// <param name="context">The context held under the database lock.</param>
+        /// <param name="context">The context reserved for the current operation.</param>
         /// <param name="language">The language shared by the graph.</param>
         private EntityIncludes(BlueprintDatabaseContext context, long language)
         {
@@ -23,7 +23,7 @@ namespace Blueprint.Database.Queries
         }
 
         /// <summary>Loads declared relationships after root materialization, selecting DB or RAM for every related contract.</summary>
-        /// <param name="context">The active context under the database lock.</param>
+        /// <param name="context">The context reserved for the current operation.</param>
         /// <param name="entities">Independent root entities.</param>
         /// <param name="language">The language applied to related entities.</param>
         /// <exception cref="Exception">Relationship mapping, synchronization, or SQL execution fails.</exception>

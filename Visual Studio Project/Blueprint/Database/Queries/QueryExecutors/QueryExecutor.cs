@@ -37,7 +37,7 @@ namespace Blueprint.Database.Queries.QueryExecutors
 
         /// <summary>Executes a terminal operation through this entity's source and its supported fallback.</summary>
         /// <typeparam name="TResult">The result type.</typeparam>
-        /// <param name="context">The active context, with the database lock already held.</param>
+        /// <param name="context">The context reserved for this operation.</param>
         /// <param name="expression">The complete expression to execute.</param>
         /// <param name="result">The result when execution is supported, including null or zero.</param>
         /// <returns>True if the query executed; otherwise false. Execution failures propagate as exceptions.</returns>
@@ -46,7 +46,7 @@ namespace Blueprint.Database.Queries.QueryExecutors
 
         /// <summary>Materializes the complete result list through this entity's source and its supported fallback.</summary>
         /// <typeparam name="TElement">The type of each result.</typeparam>
-        /// <param name="context">The active context, with the database lock already held.</param>
+        /// <param name="context">The context reserved for this operation.</param>
         /// <param name="expression">The complete sequence expression.</param>
         /// <param name="items">The results when execution is supported, including an empty list.</param>
         /// <returns>True if the query executed; otherwise false. Execution failures propagate as exceptions.</returns>
@@ -54,7 +54,7 @@ namespace Blueprint.Database.Queries.QueryExecutors
         internal abstract bool TryExecuteList<TElement>(BlueprintDatabaseContext context, Expression expression, out List<TElement>? items);
 
         /// <summary>Reads independent scalar entities matching a relationship key through this executor's source.</summary>
-        /// <param name="context">The active context under the database lock.</param>
+        /// <param name="context">The active context using the reserved context.</param>
         /// <param name="key">The primary or foreign key used by the relationship.</param>
         /// <param name="ids">The key values required by the parent entities.</param>
         /// <returns>The matching independent entities, without recursively loading relationships.</returns>

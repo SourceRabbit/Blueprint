@@ -7,8 +7,8 @@ using System.Data;
 
 namespace Blueprint.Database.TransactionFactory
 {
-    /// <summary>Creates and executes transactions for the same database with shared synchronization and automatic commit or rollback.</summary>
-    /// <remarks>Each BlueprintDatabase owns an instance. The factory uses the same lock as queries, CRUD, and database disposal.</remarks>
+    /// <summary>Creates and executes transactions for the same database with an exclusive pooled context and automatic commit or rollback.</summary>
+    /// <remarks>Each BlueprintDatabase owns an instance. Each execution reserves its own context; synchronous callback queries reuse that context.</remarks>
     public sealed class TransactionFactory
     {
         /// <summary>Creates a factory that resolves the active database when an operation is requested.</summary>
@@ -23,17 +23,13 @@ namespace Blueprint.Database.TransactionFactory
         public DatabaseTransaction CreateNewTransaction()
         {
             BlueprintDatabase database = BlueprintDatabase.ACTIVE_INSTANCE;
-            lock (database.SyncRoot)
-            {
-                _ = database.Context;
-                return new DatabaseTransaction();
-            }
+            return database.ExecuteOperation(context => new DatabaseTransaction());
         }
 
         /// <summary>Creates a transaction that reads data and prepares its operation list within the same SQL isolation scope.</summary>
         /// <param name="prepare">A synchronous callback for queries and AddInsert/AddUpdate/AddDelete/AddValidation, before writes.</param>
         /// <returns>The new transaction for this database.</returns>
-        /// <remarks>ExecuteTransactionAsync runs the callback under the shared lock, without direct CRUD or asynchronous work. Entity values are captured for rollback after preparation; the consumer is responsible for its own earlier changes.</remarks>
+        /// <remarks>ExecuteTransactionAsync runs the callback on its reserved context, without direct CRUD or asynchronous work. Entity values are captured for rollback after preparation; the consumer is responsible for its own earlier changes.</remarks>
         /// <exception cref="ArgumentNullException">No callback was provided.</exception>
         /// <exception cref="ArgumentException">The callback is async void.</exception>
         /// <exception cref="ObjectDisposedException">The database has been disposed.</exception>
@@ -42,11 +38,7 @@ namespace Blueprint.Database.TransactionFactory
         {
             ArgumentNullException.ThrowIfNull(prepare);
             BlueprintDatabase database = BlueprintDatabase.ACTIVE_INSTANCE;
-            lock (database.SyncRoot)
-            {
-                _ = database.Context;
-                return new DatabaseTransaction(prepare);
-            }
+            return database.ExecuteOperation(context => new DatabaseTransaction(prepare));
         }
 
         /// <summary>Submits operations once for atomic execution on a worker thread with automatic commit or rollback.</summary>
@@ -55,9 +47,9 @@ namespace Blueprint.Database.TransactionFactory
         /// <param name="cancellationToken">A cancellation request checked before operations and before commit.</param>
         /// <returns>The total number of write operations committed.</returns>
         /// <remarks>
-        /// The shared lock covers the entire transaction and protects the context from queries, CRUD, model changes, and disposal.
+        /// One context is reserved for the entire transaction, including preparation and validation queries on the worker thread.
         /// SQL executes synchronously on the worker while the consumer awaits asynchronously. Cancellation is checked between SQL commands.
-        /// Calls from an operation already holding the database lock or from a TransactionScope are not allowed. The caller must not modify entities until the Task completes.
+        /// Calls from an existing database operation or from a TransactionScope are not allowed. The caller must not modify entities until the Task completes.
         /// Rollback restores the supplied entities' mapped values, including IDs, foreign keys, and database-generated values.
         /// Validations run after all operations, before the final cancellation check and commit. An exception triggers rollback.
         /// </remarks>
@@ -74,7 +66,7 @@ namespace Blueprint.Database.TransactionFactory
         {
             ArgumentNullException.ThrowIfNull(transaction);
             BlueprintDatabase database = BlueprintDatabase.ACTIVE_INSTANCE;
-            if (Monitor.IsEntered(database.SyncRoot) || System.Transactions.Transaction.Current != null)
+            if (database.IsExecutingOperation || Monitor.IsEntered(database.SyncRoot) || System.Transactions.Transaction.Current != null)
             {
                 throw new InvalidOperationException("Submit a database transaction outside an existing database operation or TransactionScope.");
             }
@@ -84,48 +76,50 @@ namespace Blueprint.Database.TransactionFactory
                 bool isCommitted = false;
                 try
                 {
-                    lock (database.SyncRoot)
+                    cancellationToken.ThrowIfCancellationRequested();
+                    return database.ExecuteOperation(context =>
                     {
                         cancellationToken.ThrowIfCancellationRequested();
-                        BlueprintDatabaseContext context = database.Context;
                         if (context.Database.CurrentTransaction != null)
                         {
                             throw new InvalidOperationException("The database already has an active transaction.");
                         }
                         Dictionary<BlueprintEntity, Dictionary<IProperty, object?>> snapshots = new Dictionary<BlueprintEntity, Dictionary<IProperty, object?>>(ReferenceEqualityComparer.Instance);
-                        using IDbContextTransaction sqlTransaction = context.Database.BeginTransaction(isolationLevel);
-                        try
+                        using (IDbContextTransaction sqlTransaction = context.Database.BeginTransaction(isolationLevel))
                         {
-                            (IReadOnlyList<DatabaseTransaction.Operation> operations, IReadOnlyList<Action> validations) = transaction.PrepareExecution();
-                            cancellationToken.ThrowIfCancellationRequested();
-                            snapshots = CaptureTransactionValues(context, operations);
-                            int affectedRows = 0;
-                            foreach (DatabaseTransaction.Operation operation in operations)
+                            try
                             {
+                                (IReadOnlyList<DatabaseTransaction.Operation> operations, IReadOnlyList<Action> validations) = transaction.PrepareExecution();
                                 cancellationToken.ThrowIfCancellationRequested();
-                                affectedRows += ExecuteTransactionOperation(context, operation);
+                                snapshots = CaptureTransactionValues(context, operations);
+                                int affectedRows = 0;
+                                foreach (DatabaseTransaction.Operation operation in operations)
+                                {
+                                    cancellationToken.ThrowIfCancellationRequested();
+                                    affectedRows += ExecuteTransactionOperation(context, operation);
+                                }
+                                foreach (Action validation in validations)
+                                {
+                                    cancellationToken.ThrowIfCancellationRequested();
+                                    validation();
+                                }
+                                cancellationToken.ThrowIfCancellationRequested();
+                                sqlTransaction.Commit();
+                                isCommitted = true;
+                                return affectedRows;
                             }
-                            foreach (Action validation in validations)
+                            catch (Exception exception)
                             {
-                                cancellationToken.ThrowIfCancellationRequested();
-                                validation();
+                                RollbackTransaction(sqlTransaction, snapshots, exception);
+                                throw;
                             }
-                            cancellationToken.ThrowIfCancellationRequested();
-                            sqlTransaction.Commit();
-                            isCommitted = true;
-                            return affectedRows;
+                            finally
+                            {
+                                context.ChangeTracker.Clear();
+                                database.InvalidateCache();
+                            }
                         }
-                        catch (Exception exception)
-                        {
-                            RollbackTransaction(sqlTransaction, snapshots, exception);
-                            throw;
-                        }
-                        finally
-                        {
-                            context.ChangeTracker.Clear();
-                            database.InvalidateCache();
-                        }
-                    }
+                    });
                 }
                 finally
                 {

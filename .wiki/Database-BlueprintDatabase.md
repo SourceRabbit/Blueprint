@@ -25,24 +25,29 @@ The database name, connection settings, and language configuration are read-only
 
 | Property | Purpose |
 | --- | --- |
-| [ACTIVE_INSTANCE and Context](#active_instance-and-context) | Gets the active database and its shared EF Core context. |
+| [ACTIVE_INSTANCE](#active_instance-and-getcontext) | Gets the active database, whose GetContext method reserves a pooled EF Core context. |
 | [Name](#name) | Gets the configured database name. |
 | [ConnectionString](#connectionstring) | Gets the connection settings stored by the provider. |
 | [Languages](#languages) | Gets the independent, read-only language configuration. |
 | [TransactionFactory](#transactionfactory) | Gets this database instance's factory for creating and executing transactions. |
 | [RAMCacheRefreshInterval](#ramcacherefreshinterval) | Gets or sets the polling interval for external changes to cached data. |
 
-### ACTIVE_INSTANCE and Context
+### ACTIVE_INSTANCE and GetContext
 
-After provider initialization completes, applications can access the public context through the active instance:
+After provider initialization completes, applications can reserve a context through the active instance:
 
 ```csharp
-BlueprintDatabaseContext context = BlueprintDatabase.ACTIVE_INSTANCE.Context;
+using (BlueprintDatabaseContext context = BlueprintDatabase.ACTIVE_INSTANCE.GetContext())
+{
+    // Complete the database operation before returning the context.
+}
 ```
 
-`ACTIVE_INSTANCE` returns the instance registered by the base constructor without checking for null. Access it only after initialization and before disposal. `Context` is read-only and throws if the database has been disposed or its context has not been initialized.
+`ACTIVE_INSTANCE` returns the instance registered by the base constructor without checking for null. Access it only after initialization and before disposal. `GetContext()` replaces the former `Context` property. Each database has five contexts; the method reserves a free entry under the pool lock and waits if all five are in use.
 
-The context is shared and owned by Blueprint. Do not dispose it separately. Direct EF Core operations must not overlap other operations on the context, including Blueprint queries, transactions, cache refreshes, or database disposal. The property's getter lock protects only retrieval, not subsequent use of the returned context.
+`Dispose()` and `DisposeAsync()` call `ReleaseContext(context)`, which clears tracking, disposes any remaining transaction, restores the default query language, and marks the entry free under the same lock. Waiting callers are then notified. Complete all work and enumeration before disposal, do not share a reserved context between threads, and do not use or dispose a reference again after returning it. Finish any manually opened connection and restore any EF settings you change before returning the context.
+
+Queries, transactions, and cache refreshes use this same pool. Independent Entity operations execute concurrently on separate contexts. A thread-local value keeps nested synchronous Entity calls and transaction callbacks on their operation's reserved context; it is cleared when the operation ends. Do not use asynchronous callbacks or move transaction work to another thread. Cache refreshes and snapshot indexes have separate synchronization. Return every context before registering entities or disposing the database. Database disposal permanently closes all five contexts.
 
 ### Name
 
@@ -221,7 +226,7 @@ Stop or dispose independent `BackgroundTasksManager` instances that use the data
 
 Disposal calls the provider's resource-release hook, closes the context, and clears the active registration. Repeated disposal is safe. Operations tied to a disposed instance reject further use; static Entity API calls require a newly initialized database with the relevant contracts registered.
 
-The base class coordinates database operations through a shared lock to protect its context. This does not make concurrent edits to returned entity objects safe or coordinate writers in other processes. Database isolation, constraints, and concurrency tokens govern those writes.
+The base class reserves a separate pooled context for each concurrent operation. The pool lock protects reservation and release, not SQL execution. This does not make concurrent edits to returned entity objects safe or coordinate writers in other processes. Database isolation, constraints, and concurrency tokens govern those writes.
 
 ## Related topics
 

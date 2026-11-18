@@ -27,7 +27,7 @@ namespace Blueprint.Database.Queries
             fExpression = expression;
         }
 
-        /// <summary>Materializes the results under the database lock before exposing their enumerator.</summary>
+        /// <summary>Materializes the results using a reserved context before exposing their enumerator.</summary>
         /// <returns>The result enumerator.</returns>
         /// <exception cref="Exception">Query translation, synchronization, or execution fails.</exception>
         public IEnumerator<TElement> GetEnumerator()

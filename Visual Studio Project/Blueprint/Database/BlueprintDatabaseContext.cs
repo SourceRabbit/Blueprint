@@ -22,6 +22,7 @@ namespace Blueprint.Database
         private static readonly MethodInfo fQueryMethod = typeof(BlueprintDatabaseContext).GetMethod(nameof(CreateQuery), BindingFlags.NonPublic | BindingFlags.Instance)!;
         private static readonly EntityMaterializer fMaterializer = new();
         private readonly BlueprintEntityTypes fEntityTypes;
+        private bool fIsPermanentlyDisposed;
 
         /// <summary>Connects a set of entities to the provider settings.</summary>
         /// <param name="options">The EF Core settings.</param>
@@ -30,6 +31,33 @@ namespace Blueprint.Database
         {
             fEntityTypes = entityTypes;
             QueryLanguage = entityTypes.DefaultLanguageID;
+        }
+
+        /// <summary>Returns this context to the active database pool without destroying its EF resources.</summary>
+        public override void Dispose()
+        {
+            if (!fIsPermanentlyDisposed)
+            {
+                BlueprintDatabase.ACTIVE_INSTANCE.ReleaseContext(this);
+            }
+        }
+
+        /// <summary>Returns this context to the pool at the end of an asynchronous using block.</summary>
+        /// <returns>A completed operation after the context is returned.</returns>
+        public override ValueTask DisposeAsync()
+        {
+            Dispose();
+            return ValueTask.CompletedTask;
+        }
+
+        /// <summary>Closes EF resources when the database shuts down or replaces its initialized model.</summary>
+        internal void DisposePermanently()
+        {
+            if (!fIsPermanentlyDisposed)
+            {
+                fIsPermanentlyDisposed = true;
+                base.Dispose();
+            }
         }
 
         /// <summary>The immutable type set that defines the context model.</summary>
