@@ -336,9 +336,9 @@ namespace Blueprint.Tests.Lifecycle
 
     /// <summary>Ορίζει ελάχιστο πολύγλωσσο entity για ελέγχους κύκλου ζωής και CRUD.</summary>
     [Entity("LifecycleRecords")]
-    public interface LifecycleRecord : BlueprintEntity
+    public abstract class LifecycleRecord : BlueprintEntityDB
     {
         [Multilingual]
-        string Title { get; set; }
+        public abstract string Title { get; set; }
     }
 }

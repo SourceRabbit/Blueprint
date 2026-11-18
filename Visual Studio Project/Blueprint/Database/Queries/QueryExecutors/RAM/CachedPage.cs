@@ -2,7 +2,7 @@ using Blueprint.Database.Entities;
 using Microsoft.EntityFrameworkCore.Metadata;
 using System.Linq.Expressions;
 
-namespace Blueprint.Database.Queries.QueryExecutors.RAMCache
+namespace Blueprint.Database.Queries.QueryExecutors.RAM
 {
     /// <summary>Selects shared cached objects using safe filters, ordering, and optional paging before copying them.</summary>
     internal static class CachedPage
@@ -10,7 +10,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAMCache
         /// <summary>Translates supported operations to Enumerable, preserving the exact order of filters, sorting, and limits.</summary>
         /// <param name="expression">The complete entity sequence, with or without paging.</param>
         /// <param name="provider">The provider of the single root.</param>
-        /// <param name="contract">The result interface.</param>
+        /// <param name="contract">The result entity class.</param>
         /// <param name="concreteType">The generated class of the cached objects.</param>
         /// <param name="properties">The model's stored properties.</param>
         /// <param name="language">The language of the filters and sorting keys.</param>

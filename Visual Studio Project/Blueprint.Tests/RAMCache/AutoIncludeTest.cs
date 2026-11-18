@@ -51,7 +51,9 @@ namespace Blueprint.Tests.RAMCache
             using (SqlCommand command = writer.CreateCommand())
             {
                 command.CommandText = "SELECT COUNT(*) FROM sys.change_tracking_tables;";
-                Assert((int)command.ExecuteScalar()! == 5, "The root, explicit cached VAT category, and three transitive AutoInclude tables must be tracked.");
+                Assert((int)command.ExecuteScalar()! == 3, "Only the Product, VAT category and Metadata RAM entities must be tracked.");
+                command.CommandText = "SELECT COUNT(*) FROM sys.change_tracking_tables WHERE object_id IN (OBJECT_ID(N'dbo.IncludeDetails'), OBJECT_ID(N'dbo.IncludeOptions'));";
+                Assert((int)command.ExecuteScalar()! == 0, "DB AutoInclude entities must not be promoted into RAM cache.");
                 command.CommandText = "SELECT COUNT(*) FROM sys.change_tracking_tables WHERE object_id = OBJECT_ID(N'dbo.IncludeBrands');";
                 Assert((int)command.ExecuteScalar()! == 0, "A relationship without AutoInclude must not implicitly become cached.");
             }
@@ -68,7 +70,7 @@ namespace Blueprint.Tests.RAMCache
             Assert(retained.Title == "Original EN" && retained.VatCategory!.Rate == 24m, "Full cached entities must include the already RAMCached VAT category.");
             Assert(retained.VatCategory!.Title == "VAT" && retained.VatCategory.CurrentLanguage == 2, "Included references must preserve multilingual fallback and the requested language.");
             Assert(retained.VatCategory!.Products.Count == 1 && ReferenceEquals(retained.VatCategory.Products[0], retained), "Included references must preserve EF inverse collection fix-up without caching extra rows.");
-            Assert(retained.Details!.Metadata.Title == "Metadata EN", "AutoIncludes must propagate transitively to contracts without RAMCached.");
+            Assert(retained.Details!.Metadata.Title == "Metadata EN", "A RAM to DB to RAM path must preserve the selected language.");
             Assert(retained.Options.Count == 1 && ReferenceEquals(retained.Options[0].Product, retained), "Included collections must reuse cyclic ancestors without unbounded recursion.");
             IncludedProduct empty = IncludedProduct.Where(product => product.ID == 2).First();
             Assert(empty.VatCategory == null && empty.Details == null && empty.Options.Count == 0, "Missing optional references and empty collections must remain valid.");
@@ -95,12 +97,16 @@ namespace Blueprint.Tests.RAMCache
                 COMMIT;
                 """);
             IncludedProduct stale = IncludedProduct.Where(product => product.ID == 1, 2).Single();
-            Assert(stale.Title == "Original EN" && stale.VatCategory!.Rate == 24m && stale.Options[0].Title == "Red", "External root and related changes must remain invisible until cache synchronization.");
+            Assert(stale.Title == "Original EN" && stale.VatCategory!.Rate == 24m && stale.Options[0].Title == "Blue", "RAM entities must retain snapshots while DB AutoInclude collections read current SQL values.");
+            Assert(IncludedDetails.Where(item => item.ID == 1).Single().Metadata.Title == "Metadata", "A DB root must load its RAM reference using the default cache language.");
+            Assert(IncludedDetails.Where(item => item.ID == 1, 2).Single().Metadata.Title == "Metadata EN", "A DB root must read stale RAM translations before cache refresh.");
+            Assert(IncludedDetails.Where(item => item.ID == 1, 2).ToList()[0].Metadata.Title == "Metadata EN", "DB list materialization must also load the RAM target from its own snapshot.");
+            Assert(IncludedOption.Where(item => item.ID == 1, 2).Single().Product.Title == "Original EN", "A DB root must load its RAM parent from the cached snapshot.");
             Assert(IncludedProduct.Where(product => product.VatCategory != null && product.VatCategory.Rate == 24m).Count() == 1, "Filters over an included reference must use its cached value.");
             Assert(IncludedProduct.Where(product => product.ID == 1).Select(product => product.VatCategory!.Rate).Single() == 24m, "Scalar navigation projections must use RAM before refresh.");
             Assert(IncludedProduct.Where(product => product.ID == 1).Select(product => product.VatCategory).ToList()[0]!.Rate == 24m, "Entity navigation projections must return independent cached objects.");
             Assert(IncludedProduct.Where(product => product.ID == 1).OrderBy(product => product.VatCategory!.Rate).ToList()[0].Title == "Original", "Sorting by an included reference must not force SQL.");
-            Assert(IncludedProduct.Where(product => product.Options.Any(option => option.Title == "Red")).Any(), "Collection filters must use the cached included rows.");
+            Assert(IncludedProduct.Where(product => product.Options.Any(option => option.Title == "Blue")).Any(), "RAM query collection filters must use the DB child executor's current rows.");
             Assert(IncludedProduct.Where(product => product.ID == 1, 2).Select(product => product.Details!.Metadata.Title).ToList()[0] == "Metadata EN", "Nested navigation projections must preserve cached translations.");
             Assert(IncludedProduct.Where(product => product.Brand.Title == "Updated brand").Select(product => product.Title).First() == "Updated", "Queries using a non-included relationship must retain SQL fallback.");
             Assert(IncludedMetadata.Where(metadata => true, 2).Single().Title == "Metadata EN", "Direct queries of implicit dependencies must also stay cached before refresh.");
@@ -110,14 +116,12 @@ namespace Blueprint.Tests.RAMCache
             Assert(retained.Title == "Original EN" && retained.VatCategory!.Rate == 24m && retained.Options[0].Title == "Red", "Refresh must not mutate previously returned graphs.");
 
             ExecuteSql(writer, "INSERT dbo.IncludeOptions (ID, ProductID, Title) VALUES (2, 1, N'Green');");
-            Assert(IncludedProduct.Where(product => product.ID == 1).Single().Options.Count == 1, "External inserts must not leak into cached collections before synchronization.");
-            WaitForRefresh(database, () => IncludedProduct.Where(product => product.ID == 1).Single().Options.Count == 2);
+            Assert(IncludedProduct.Where(product => product.ID == 1).Single().Options.Count == 2, "DB child inserts must be visible without a RAM refresh.");
             ExecuteSql(writer, "UPDATE dbo.IncludeOptions SET ProductID = 2 WHERE ID = 2;");
-            Assert(IncludedProduct.Where(product => product.ID == 2).Single().Options.Count == 0, "Foreign-key changes must wait for synchronization.");
-            WaitForRefresh(database, () => IncludedProduct.Where(product => product.ID == 2).Single().Options.Count == 1);
+            Assert(IncludedProduct.Where(product => product.ID == 2).Single().Options.Count == 1, "DB child foreign-key changes must be visible without refreshing the parent cache.");
             Assert(IncludedProduct.Where(product => product.ID == 1).Single().Options.Count == 1, "Refreshing a foreign key must remove the row from the previous principal's index.");
             ExecuteSql(writer, "DELETE dbo.IncludeOptions WHERE ID = 2;");
-            WaitForRefresh(database, () => IncludedProduct.Where(product => product.ID == 2).Single().Options.Count == 0);
+            Assert(IncludedProduct.Where(product => product.ID == 2).Single().Options.Count == 0, "DB child deletes must be visible without a RAM refresh.");
 
             IncludedVatCategory category = IncludedVatCategory.Where(item => item.ID == 1).Single();
             category.Rate = 19m;
@@ -129,9 +133,13 @@ namespace Blueprint.Tests.RAMCache
             var transaction = database.TransactionFactory.CreateNewTransaction(pending =>
             {
                 Assert(IncludedProduct.Where(product => product.ID == 1).Select(product => product.VatCategory!.Rate).Single() == 7m, "Transactions must bypass cached graphs and read current SQL values.");
+                Assert(IncludedProduct.SingleOrDefault(product => product.ID == 1)!.VatCategory!.Rate == 7m, "Transaction AutoIncludes must use SQL even when their target normally uses RAM.");
             });
             database.TransactionFactory.ExecuteTransactionAsync(transaction).GetAwaiter().GetResult();
             Assert(IncludedProduct.Where(product => product.ID == 1).Single().VatCategory!.Rate == 7m, "After a transaction the cache must synchronize the committed related value.");
+            ExecuteSql(writer, "INSERT dbo.IncludeProducts (ID, Title, TitleEN, BrandID) VALUES (3, N'New', N'New EN', 1); INSERT dbo.IncludeOptions (ID, ProductID, Title) VALUES (3, 3, N'New option');");
+            Assert(IncludedOption.SingleOrDefault(option => option.ID == 3)!.Product == null, "A DB reference missing from the RAM snapshot must not silently fall back to SQL.");
+            WaitForRefresh(database, () => IncludedOption.SingleOrDefault(option => option.ID == 3)!.Product?.ID == 3);
         }
 
         /// <summary>Περιμένει πραγματικό refresh με μικρό διάστημα και ελέγχει κατόπιν με μεγάλο διάστημα χωρίς query-triggered refresh.</summary>
@@ -175,66 +183,66 @@ namespace Blueprint.Tests.RAMCache
     }
 
     /// <summary>Προσομοιώνει το Product με cached VAT reference, nested includes, συλλογή και μη cached σχέση.</summary>
-    [Entity("IncludeProducts"), RAMCached]
-    public interface IncludedProduct : BlueprintEntity
+    [Entity("IncludeProducts")]
+    public abstract class IncludedProduct : BlueprintEntityRAM
     {
         [Multilingual]
-        string? Title { get; set; }
-        long? VatCategoryID { get; set; }
+        public abstract string? Title { get; set; }
+        public abstract long? VatCategoryID { get; set; }
         [ForeignKey(nameof(VatCategoryID)), AutoInclude]
-        IncludedVatCategory? VatCategory { get; set; }
-        long? DetailsID { get; set; }
+        public abstract IncludedVatCategory? VatCategory { get; set; }
+        public abstract long? DetailsID { get; set; }
         [ForeignKey(nameof(DetailsID)), AutoInclude]
-        IncludedDetails? Details { get; set; }
+        public abstract IncludedDetails? Details { get; set; }
         [AutoInclude]
-        List<IncludedOption> Options { get; set; }
-        long BrandID { get; set; }
+        public abstract List<IncludedOption> Options { get; set; }
+        public abstract long BrandID { get; set; }
         [ForeignKey(nameof(BrandID))]
-        IncludedBrand Brand { get; set; }
+        public abstract IncludedBrand Brand { get; set; }
     }
 
-    /// <summary>Δηλώνεται ήδη RAMCached, όπως το ProductVatCategory του CMS.</summary>
-    [Entity("IncludeVatCategories"), RAMCached]
-    public interface IncludedVatCategory : BlueprintEntity
+    /// <summary>Κληρονομεί ήδη από BlueprintEntityRAM για άμεση επιλογή caching.</summary>
+    [Entity("IncludeVatCategories")]
+    public abstract class IncludedVatCategory : BlueprintEntityRAM
     {
         [Precision(5, 2)]
-        decimal Rate { get; set; }
-        List<IncludedProduct> Products { get; set; }
+        public abstract decimal Rate { get; set; }
+        public abstract List<IncludedProduct> Products { get; set; }
         [Multilingual, FallbackToDefaultLanguage]
-        string? Title { get; set; }
+        public abstract string? Title { get; set; }
     }
 
-    /// <summary>Γίνεται έμμεσα cached λόγω AutoInclude και οδηγεί σε δεύτερο επίπεδο σχέσης.</summary>
+    /// <summary>Διαβάζεται από SQL και οδηγεί σε δεύτερο επίπεδο σχέσης με RAM entity.</summary>
     [Entity("IncludeDetails")]
-    public interface IncludedDetails : BlueprintEntity
+    public abstract class IncludedDetails : BlueprintEntityDB
     {
-        long MetadataID { get; set; }
+        public abstract long MetadataID { get; set; }
         [ForeignKey(nameof(MetadataID)), AutoInclude]
-        IncludedMetadata Metadata { get; set; }
+        public abstract IncludedMetadata Metadata { get; set; }
     }
 
-    /// <summary>Ελέγχει διαδοχική ένταξη στην cache και πολυγλωσσική ανάγνωση.</summary>
+    /// <summary>Ελέγχει πολυγλωσσική ανάγνωση από RAM ακόμη και μέσω DB parent.</summary>
     [Entity("IncludeMetadata")]
-    public interface IncludedMetadata : BlueprintEntity
+    public abstract class IncludedMetadata : BlueprintEntityRAM
     {
         [Multilingual]
-        string? Title { get; set; }
+        public abstract string? Title { get; set; }
     }
 
     /// <summary>Ελέγχει συλλογές και AutoInclude που επιστρέφει κυκλικά στον γονέα.</summary>
     [Entity("IncludeOptions")]
-    public interface IncludedOption : BlueprintEntity
+    public abstract class IncludedOption : BlueprintEntityDB
     {
-        long ProductID { get; set; }
+        public abstract long ProductID { get; set; }
         [ForeignKey(nameof(ProductID)), AutoInclude]
-        IncludedProduct Product { get; set; }
-        string? Title { get; set; }
+        public abstract IncludedProduct Product { get; set; }
+        public abstract string? Title { get; set; }
     }
 
     /// <summary>Παραμένει εκτός RAM cache επειδή η σχέση δεν δηλώνει AutoInclude.</summary>
     [Entity("IncludeBrands")]
-    public interface IncludedBrand : BlueprintEntity
+    public abstract class IncludedBrand : BlueprintEntityDB
     {
-        string? Title { get; set; }
+        public abstract string? Title { get; set; }
     }
 }

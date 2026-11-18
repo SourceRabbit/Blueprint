@@ -14,11 +14,12 @@ This manual describes the consumer API available in this repository. Examples ta
   - [SqlDatabase](Database-SqlServer.md): database provider for Microsoft SQL Server.
   - [MySQL](Database-MySqlServer.md): Coming Soon.
 - Entities
-  - [BlueprintEntity](Database-Entities-BlueprintEntity.md)
+  - [BlueprintEntity, BlueprintEntityDB, and BlueprintEntityRAM](Database-Entities-BlueprintEntity.md): class-based entities, storage/cache selection, and migration from interfaces.
   - [Data Annotations](Database-Entities-Annotations.md): configure fields, indexes, generated values, and concurrency tokens.
   - [Relationships](Data-Entities-Relationships.md): define foreign keys, reference properties, inverse collections, and automatic loading.
   - [Schema Synchronization](Database-Entities-Schema-Synchronization.md): understand which database changes registration applies automatically.
 - Reading and Writing Data
+  - [Query Executors](Database-Query-Executors.md): the shared LINQ API and per-entity DB/RAM execution, including mixed AutoInclude graphs.
   - [Queries and CRUD](Database-Queries-and-CRUD.md): filter, sort, page, insert, update, and delete.
   - [Transactions](Database-Transactions.md): group writes, prepare operations, validate before commit, and handle rollback or cancellation.
 - Localization

@@ -16,7 +16,7 @@ using Blueprint.Fundamentals;
 
 namespace Blueprint.Database
 {
-    /// <summary>Maps generated classes and interface attributes to the EF Core model.</summary>
+    /// <summary>Maps generated subclasses and entity attributes to the EF Core model.</summary>
     internal sealed class BlueprintDatabaseContext : DbContext
     {
         private static readonly MethodInfo fQueryMethod = typeof(BlueprintDatabaseContext).GetMethod(nameof(CreateQuery), BindingFlags.NonPublic | BindingFlags.Instance)!;
@@ -51,44 +51,58 @@ namespace Blueprint.Database
             optionsBuilder.AddInterceptors(fMaterializer);
         }
 
-        /// <summary>Returns a query for the generated type through its public interface.</summary>
+        /// <summary>Returns a query for the generated type through its public entity class.</summary>
         /// <typeparam name="TEntity">The entity contract.</typeparam>
-        /// <param name="includeRelated">Whether AutoInclude relationships should be loaded.</param>
         /// <returns>An EF Core query without tracking.</returns>
-        internal IQueryable<TEntity> Query<TEntity>(bool includeRelated) where TEntity : class, BlueprintEntity
+        internal IQueryable<TEntity> Query<TEntity>() where TEntity : BlueprintEntity
         {
-            var query = (IQueryable)fQueryMethod.MakeGenericMethod(fEntityTypes.Types[typeof(TEntity)]).Invoke(this, new object[] { includeRelated })!;
-            return query.Cast<TEntity>();
+            return Query(typeof(TEntity)).Cast<TEntity>();
         }
 
-        /// <summary>Creates the actual DbSet root and applies automatic relationships.</summary>
+        /// <summary>Creates the actual DbSet root without loading relationships from the root's source.</summary>
         /// <typeparam name="TEntity">The generated class.</typeparam>
-        /// <param name="includeRelated">Whether AutoInclude relationships are requested.</param>
         /// <returns>The query for the concrete CLR type.</returns>
-        private IQueryable<TEntity> CreateQuery<TEntity>(bool includeRelated) where TEntity : class
+        private IQueryable<TEntity> CreateQuery<TEntity>() where TEntity : class
         {
-            var query = Set<TEntity>().AsNoTrackingWithIdentityResolution();
-            return includeRelated ? EntityIncludes.Apply(this, query) : query;
+            return Set<TEntity>().AsNoTrackingWithIdentityResolution();
         }
 
-        /// <summary>Defines unique IDs, per-table sequences, indexes, multilingual columns, and relationships from interfaces.</summary>
+        /// <summary>Creates an untracked query for a runtime entity contract, leaving AutoInclude loading to its executors.</summary>
+        /// <param name="contract">The registered entity class.</param>
+        /// <returns>The generated entity query.</returns>
+        internal IQueryable Query(Type contract)
+        {
+            return (IQueryable)fQueryMethod.MakeGenericMethod(fEntityTypes.Types[contract]).Invoke(this, null)!;
+        }
+
+        /// <summary>Defines independent entity tables, per-table sequences, indexes, multilingual columns, and relationships.</summary>
         /// <param name="modelBuilder">The EF Core builder.</param>
         /// <exception cref="InvalidOperationException">The table or relationship definitions are incompatible.</exception>
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            var tables = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var (contract, concreteType) in fEntityTypes.Types)
+            // Contracts and their shared bases are not EF inheritance roots or additional tables.
+            foreach (Type contract in fEntityTypes.Types.Keys)
             {
-                var attribute = contract.GetCustomAttribute<EntityAttribute>()!;
-                var tableName = attribute.TableName ?? contract.Name;
+                for (Type? type = contract; type != null && type != typeof(object); type = type.BaseType)
+                {
+                    modelBuilder.Ignore(type);
+                }
+            }
+
+            HashSet<string> tables = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach ((Type contract, Type concreteType) in fEntityTypes.Types)
+            {
+                EntityAttribute attribute = contract.GetCustomAttribute<EntityAttribute>()!;
+                string tableName = attribute.TableName ?? contract.Name;
                 if (string.IsNullOrWhiteSpace(tableName) || string.IsNullOrWhiteSpace(attribute.Schema) || !tables.Add(attribute.Schema + "." + tableName))
                 {
                     throw new InvalidOperationException($"Entity '{contract}' must have a distinct, nonempty table and schema.");
                 }
 
-                var builder = modelBuilder.Entity(concreteType);
+                EntityTypeBuilder builder = modelBuilder.Entity(concreteType);
+                builder.HasBaseType((Type?)null);
                 builder.ToTable(tableName, attribute.Schema);
-                foreach (var property in global::Blueprint.Database.Entities.BlueprintEntityTypes.GetProperties(contract))
+                foreach (PropertyInfo property in global::Blueprint.Database.Entities.BlueprintEntityTypes.GetProperties(contract))
                 {
                     if (property.IsDefined(typeof(NotMappedAttribute)))
                     {
@@ -110,10 +124,10 @@ namespace Blueprint.Database
 
                 builder.HasKey(nameof(BlueprintEntity.ID));
                 modelBuilder.HasSequence<long>(tableName + "_ID", attribute.Schema).StartsAt(1).IncrementsBy(1);
-                var sequenceName = this.GetService<ISqlGenerationHelper>().DelimitIdentifier(tableName + "_ID", attribute.Schema);
+                string sequenceName = this.GetService<ISqlGenerationHelper>().DelimitIdentifier(tableName + "_ID", attribute.Schema);
                 builder.Property<long>(nameof(BlueprintEntity.ID)).HasDefaultValueSql("NEXT VALUE FOR " + sequenceName).ValueGeneratedOnAdd();
 
-                foreach (var index in contract.GetCustomAttributes<EntityIndex>())
+                foreach (EntityIndex index in contract.GetCustomAttributes<EntityIndex>())
                 {
                     if (index.PropertyNames.Any(name => builder.Metadata.FindProperty(name) == null))
                     {
@@ -123,17 +137,17 @@ namespace Blueprint.Database
                 }
             }
 
-            foreach (var (contract, concreteType) in fEntityTypes.Types)
+            foreach ((Type contract, Type concreteType) in fEntityTypes.Types)
             {
-                foreach (var property in global::Blueprint.Database.Entities.BlueprintEntityTypes.GetProperties(contract).Where(property => typeof(BlueprintEntity).IsAssignableFrom(property.PropertyType) && !property.IsDefined(typeof(NotMappedAttribute))))
+                foreach (PropertyInfo property in global::Blueprint.Database.Entities.BlueprintEntityTypes.GetProperties(contract).Where(property => typeof(BlueprintEntity).IsAssignableFrom(property.PropertyType) && !property.IsDefined(typeof(NotMappedAttribute))))
                 {
                     ConfigureReference(modelBuilder, concreteType, contract, property);
                 }
             }
 
-            foreach (var (contract, concreteType) in fEntityTypes.Types)
+            foreach ((Type contract, Type concreteType) in fEntityTypes.Types)
             {
-                foreach (var property in global::Blueprint.Database.Entities.BlueprintEntityTypes.GetProperties(contract).Where(property => !property.IsDefined(typeof(NotMappedAttribute))))
+                foreach (PropertyInfo property in global::Blueprint.Database.Entities.BlueprintEntityTypes.GetProperties(contract).Where(property => !property.IsDefined(typeof(NotMappedAttribute))))
                 {
                     if (global::Blueprint.Database.Entities.BlueprintEntityTypes.GetRelatedContract(property.PropertyType) != null && modelBuilder.Entity(concreteType).Metadata.FindNavigation(property.Name) == null)
                     {
@@ -143,7 +157,7 @@ namespace Blueprint.Database
             }
         }
 
-        /// <summary>Transfers scalar property constraints from the interface to EF Core.</summary>
+        /// <summary>Transfers scalar property constraints from the entity class to EF Core.</summary>
         /// <param name="builder">The generated class builder.</param>
         /// <param name="property">The original property declaration.</param>
         /// <param name="language">The translation language, or null for a shared property.</param>
@@ -199,7 +213,7 @@ namespace Blueprint.Database
         /// <summary>Maps a reference and optional inverse collection using the unique ID.</summary>
         /// <param name="modelBuilder">The model builder.</param>
         /// <param name="concreteType">The generated class of the dependent entity.</param>
-        /// <param name="contract">The dependent entity interface.</param>
+        /// <param name="contract">The dependent entity class.</param>
         /// <param name="property">The reference property.</param>
         /// <exception cref="InvalidOperationException">The relationship does not specify existing columns.</exception>
         private void ConfigureReference(ModelBuilder modelBuilder, Type concreteType, Type contract, PropertyInfo property)

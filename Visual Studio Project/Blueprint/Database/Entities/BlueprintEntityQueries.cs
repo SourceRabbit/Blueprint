@@ -6,10 +6,10 @@ using System.Linq.Expressions;
 
 namespace Blueprint.Database.Entities
 {
-    /// <summary>Provides shared query, insert, update, and delete syntax for types implementing BlueprintEntity.</summary>
+    /// <summary>Provides shared query, insert, update, and delete syntax for types deriving from BlueprintEntity.</summary>
     public static class BlueprintEntityQueries
     {
-        extension<TEntity>(TEntity) where TEntity : class, BlueprintEntity
+        extension<TEntity>(TEntity) where TEntity : BlueprintEntity
         {
             /// <summary>Creates an entity instance through the active database without persisting it.</summary>
             /// <returns>The new instance of the generated class.</returns>
@@ -22,7 +22,7 @@ namespace Blueprint.Database.Entities
             /// <param name="predicate">The filter to translate to SQL through EF Core.</param>
             /// <returns>An entity query that supports further LINQ composition and executes when results are read.</returns>
             /// <exception cref="ArgumentNullException">The filter is null.</exception>
-            /// <exception cref="ArgumentException">The type is not a registered BlueprintEntity interface.</exception>
+            /// <exception cref="ArgumentException">The type is not a registered BlueprintEntity class.</exception>
             /// <exception cref="InvalidOperationException">No initialized Blueprint is active.</exception>
             /// <exception cref="ObjectDisposedException">The active Blueprint's database has been disposed.</exception>
             public static IQueryable<TEntity> Where(Expression<Func<TEntity, bool>> predicate)
@@ -48,7 +48,7 @@ namespace Blueprint.Database.Entities
             /// <summary>Returns one entity row from the active Blueprint database without loading the entire table.</summary>
             /// <returns>One row, or null if the table is empty.</returns>
             /// <remarks>Without ordering, the returned row is not guaranteed.</remarks>
-            /// <exception cref="ArgumentException">The type is not a registered BlueprintEntity interface.</exception>
+            /// <exception cref="ArgumentException">The type is not a registered BlueprintEntity class.</exception>
             /// <exception cref="InvalidOperationException">No initialized Blueprint is active.</exception>
             /// <exception cref="ObjectDisposedException">The active Blueprint's database has been disposed.</exception>
             /// <exception cref="System.Data.Common.DbException">Reading from the database fails.</exception>
@@ -62,7 +62,7 @@ namespace Blueprint.Database.Entities
             /// <returns>The first matching row, or null if no result exists.</returns>
             /// <remarks>If multiple rows match, the returned row is not guaranteed without ordering.</remarks>
             /// <exception cref="ArgumentNullException">The filter is null.</exception>
-            /// <exception cref="ArgumentException">The type is not a registered BlueprintEntity interface.</exception>
+            /// <exception cref="ArgumentException">The type is not a registered BlueprintEntity class.</exception>
             /// <exception cref="InvalidOperationException">No initialized Blueprint is active.</exception>
             /// <exception cref="ObjectDisposedException">The active Blueprint's database has been disposed.</exception>
             /// <exception cref="System.Data.Common.DbException">Reading from the database fails.</exception>
@@ -101,7 +101,7 @@ namespace Blueprint.Database.Entities
 
             /// <summary>Checks whether the active Blueprint database contains any rows without loading entities.</summary>
             /// <returns>True if at least one row exists; otherwise false.</returns>
-            /// <exception cref="ArgumentException">The type is not a registered BlueprintEntity interface.</exception>
+            /// <exception cref="ArgumentException">The type is not a registered BlueprintEntity class.</exception>
             /// <exception cref="InvalidOperationException">No initialized Blueprint is active.</exception>
             /// <exception cref="ObjectDisposedException">The active Blueprint's database has been disposed.</exception>
             /// <exception cref="System.Data.Common.DbException">Checking for rows in the database fails.</exception>
@@ -114,7 +114,7 @@ namespace Blueprint.Database.Entities
             /// <param name="predicate">The filter to translate to SQL through EF Core.</param>
             /// <returns>True if at least one matching row exists; otherwise false.</returns>
             /// <exception cref="ArgumentNullException">The filter is null.</exception>
-            /// <exception cref="ArgumentException">The type is not a registered BlueprintEntity interface.</exception>
+            /// <exception cref="ArgumentException">The type is not a registered BlueprintEntity class.</exception>
             /// <exception cref="InvalidOperationException">No initialized Blueprint is active.</exception>
             /// <exception cref="ObjectDisposedException">The active Blueprint's database has been disposed.</exception>
             /// <exception cref="System.Data.Common.DbException">Checking for rows in the database fails.</exception>
@@ -128,7 +128,7 @@ namespace Blueprint.Database.Entities
             /// <param name="entity">The entity to insert.</param>
             /// <returns>The number of inserted rows.</returns>
             /// <exception cref="ArgumentNullException">The entity is null.</exception>
-            /// <exception cref="ArgumentException">The type is not a registered BlueprintEntity interface.</exception>
+            /// <exception cref="ArgumentException">The type is not a registered BlueprintEntity class.</exception>
             /// <exception cref="InvalidOperationException">No initialized Blueprint is active.</exception>
             /// <exception cref="ObjectDisposedException">The active Blueprint's database has been disposed.</exception>
             /// <exception cref="System.Data.Common.DbException">Inserting into the database fails.</exception>
@@ -142,7 +142,7 @@ namespace Blueprint.Database.Entities
             /// <param name="entities">The entities to insert.</param>
             /// <returns>The number of inserted rows, or zero for an empty collection.</returns>
             /// <exception cref="ArgumentNullException">The collection is null.</exception>
-            /// <exception cref="ArgumentException">The type is not a registered BlueprintEntity interface.</exception>
+            /// <exception cref="ArgumentException">The type is not a registered BlueprintEntity class.</exception>
             /// <exception cref="InvalidOperationException">No initialized Blueprint is active.</exception>
             /// <exception cref="ObjectDisposedException">The active Blueprint's database has been disposed.</exception>
             /// <exception cref="System.Data.Common.DbException">Inserting into the database fails.</exception>
@@ -156,7 +156,7 @@ namespace Blueprint.Database.Entities
             /// <param name="entity">The entity containing the row's primary key and new field values.</param>
             /// <returns>The number of updated rows, or zero if the row was not found.</returns>
             /// <exception cref="ArgumentNullException">The entity is null.</exception>
-            /// <exception cref="ArgumentException">The type is not a registered BlueprintEntity interface.</exception>
+            /// <exception cref="ArgumentException">The type is not a registered BlueprintEntity class.</exception>
             /// <exception cref="InvalidOperationException">No initialized Blueprint is active, or the entity has no primary key defined.</exception>
             /// <exception cref="ObjectDisposedException">The active Blueprint's database has been disposed.</exception>
             /// <exception cref="System.Data.Common.DbException">Updating the database fails.</exception>
@@ -170,7 +170,7 @@ namespace Blueprint.Database.Entities
             /// <param name="entities">The entities containing the rows' primary keys and new field values.</param>
             /// <returns>The total number of updated rows, or zero for an empty collection or when no rows were found.</returns>
             /// <exception cref="ArgumentNullException">The collection is null.</exception>
-            /// <exception cref="ArgumentException">The type is not a registered BlueprintEntity interface.</exception>
+            /// <exception cref="ArgumentException">The type is not a registered BlueprintEntity class.</exception>
             /// <exception cref="InvalidOperationException">No initialized Blueprint is active, or the type has no primary key defined.</exception>
             /// <exception cref="ObjectDisposedException">The active Blueprint's database has been disposed.</exception>
             /// <exception cref="System.Data.Common.DbException">Updating the database fails.</exception>
@@ -184,7 +184,7 @@ namespace Blueprint.Database.Entities
             /// <param name="predicate">The required filter that determines which rows to delete.</param>
             /// <returns>The number of deleted rows, or zero if no rows matched.</returns>
             /// <exception cref="ArgumentNullException">The filter is null.</exception>
-            /// <exception cref="ArgumentException">The type is not a registered BlueprintEntity interface.</exception>
+            /// <exception cref="ArgumentException">The type is not a registered BlueprintEntity class.</exception>
             /// <exception cref="InvalidOperationException">No initialized Blueprint is active.</exception>
             /// <exception cref="ObjectDisposedException">The active Blueprint's database has been disposed.</exception>
             /// <exception cref="System.Data.Common.DbException">Deleting from the database fails.</exception>

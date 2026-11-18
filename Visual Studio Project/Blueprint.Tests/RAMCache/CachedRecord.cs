@@ -5,13 +5,13 @@ using Microsoft.EntityFrameworkCore;
 namespace Blueprint.Tests.RAMCache
 {
     /// <summary>Ορίζει έναν ανεξάρτητο cached πίνακα για ελέγχους συγχρονισμού με εξωτερικές SQL αλλαγές.</summary>
-    [Entity("RAMCachedRecords"), RAMCached]
-    public interface CachedRecord : BlueprintEntity
+    [Entity("RAMCachedRecords")]
+    public abstract class CachedRecord : BlueprintEntityRAM
     {
         [Precision(18, 2)]
-        decimal Price { get; set; }
+        public abstract decimal Price { get; set; }
 
         [Multilingual]
-        string? Title { get; set; }
+        public abstract string? Title { get; set; }
     }
 }

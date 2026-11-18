@@ -8,58 +8,58 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Blueprint.Tests.Performance
 {
     /// <summary>Χαρτογραφεί όλα τα πεδία και τις μεταφράσεις του υπάρχοντος πίνακα Products της DemoEShop.</summary>
-    [Entity("website_ecommerce_products"), RAMCached]
-    public interface Product : BlueprintEntity
+    [Entity("website_ecommerce_products")]
+    public abstract class Product : BlueprintEntityRAM
     {
         [DefaultValue(0)]
-        int Type { get; set; }
+        public abstract int Type { get; set; }
 
-        long? ParentProductID { get; set; }
+        public abstract long? ParentProductID { get; set; }
 
-        bool IsActive { get; set; }
-
-        [MaxLength(64)]
-        string SKU { get; set; }
+        public abstract bool IsActive { get; set; }
 
         [MaxLength(64)]
-        string? EAN { get; set; }
+        public abstract string SKU { get; set; }
+
+        [MaxLength(64)]
+        public abstract string? EAN { get; set; }
 
         [Precision(18, 2)]
-        decimal? NetPrice { get; set; }
+        public abstract decimal? NetPrice { get; set; }
 
-        long VatCategoryID { get; set; }
+        public abstract long VatCategoryID { get; set; }
 
         [Multilingual, MaxLength(256)]
-        string? Title { get; set; }
+        public abstract string? Title { get; set; }
 
         [Multilingual, MaxLength(512)]
-        string? ShortDescription { get; set; }
+        public abstract string? ShortDescription { get; set; }
 
         [Multilingual]
-        string? Description { get; set; }
+        public abstract string? Description { get; set; }
 
         [Multilingual, MaxLength(256)]
-        string? Slug { get; set; }
+        public abstract string? Slug { get; set; }
 
-        long? BrandID { get; set; }
+        public abstract long? BrandID { get; set; }
 
-        int? Stock { get; set; }
+        public abstract int? Stock { get; set; }
 
-        long? SizeID { get; set; }
+        public abstract long? SizeID { get; set; }
 
-        long? ColorID { get; set; }
+        public abstract long? ColorID { get; set; }
 
-        int SortOrder { get; set; }
+        public abstract int SortOrder { get; set; }
 
-        bool IsDefaultVariant { get; set; }
+        public abstract bool IsDefaultVariant { get; set; }
 
         [Precision(18, 3)]
-        decimal? Weight { get; set; }
+        public abstract decimal? Weight { get; set; }
 
         [Column(TypeName = "datetime2(0)")]
-        DateTime CreatedDate { get; set; }
+        public abstract DateTime CreatedDate { get; set; }
 
         [Column(TypeName = "datetime2(0)")]
-        DateTime ModifiedDate { get; set; }
+        public abstract DateTime ModifiedDate { get; set; }
     }
 }

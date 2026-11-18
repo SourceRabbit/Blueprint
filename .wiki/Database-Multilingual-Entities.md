@@ -29,10 +29,10 @@ The [Product contract](Database-Tutorial-EShop-Checkout.md#define-a-contract) de
 
 ```csharp
 [Multilingual, MaxLength(200)]
-string? Title { get; set; }
+public abstract string? Title { get; set; }
 ```
 
-This declaration belongs inside the entity interface, with `Blueprint.Database.Entities.Annotations` and `System.ComponentModel.DataAnnotations` imported.
+This declaration belongs inside an abstract entity class derived from `BlueprintEntityDB` or `BlueprintEntityRAM`, with `Blueprint.Database.Entities.Annotations` and `System.ComponentModel.DataAnnotations` imported. An implemented multilingual property must use overridable `virtual` accessors so the generated subclass can select its translation.
 
 | Language ID | Prefix | SQL column for `Title` |
 | --- | --- | --- |
@@ -85,7 +85,7 @@ Apply `[FallbackToDefaultLanguage]` alongside `[Multilingual]` before registerin
 ```csharp
 [Multilingual]
 [FallbackToDefaultLanguage]
-string? Title { get; set; }
+public abstract string? Title { get; set; }
 ```
 
 Both annotations belong to `Blueprint.Database.Entities.Annotations`. Registration rejects `[FallbackToDefaultLanguage]` without `[Multilingual]`, or on a property that is not a mapped string.

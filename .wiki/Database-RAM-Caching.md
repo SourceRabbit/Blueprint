@@ -1,33 +1,40 @@
 # RAM Caching
 
-`[RAMCached]` keeps a table's data in application memory for eligible Entity API queries. SQL Server remains the durable store. Writes still go to SQL, and SQL Server Change Tracking is used to synchronize committed changes made by this application or other writers.
+`BlueprintEntityRAM` keeps a table's data in application memory for eligible Entity API queries. SQL Server remains the durable store. Writes still go to SQL, and SQL Server Change Tracking is used to synchronize committed changes made by this application or other writers.
 
 ## Enable caching
 
-Add `[RAMCached]` to a contract before registration. For the shared Product example, add this annotation above its interface declaration:
+Derive the entity class from `BlueprintEntityRAM` before registration. For example:
 
 ```csharp
-[RAMCached]
+[Entity("Products")]
+public abstract class Product : BlueprintEntityRAM
+{
+    public abstract string SKU { get; set; }
+
+    [Multilingual]
+    public abstract string? Title { get; set; }
+}
 ```
 
-Import `Blueprint.Database.Entities.Annotations`. Set the refresh interval on the database when needed:
+Import `Blueprint.Database.Entities` and `Blueprint.Database.Entities.Annotations`. Keep the full Product contract from the checkout tutorial when using its other examples. `[RAMCached]` has been removed; cache selection now follows inheritance. Set the refresh interval on the database when needed:
 
 ```csharp
 database.RAMCacheRefreshInterval = TimeSpan.FromSeconds(2);
 database.RegisterEntity<Product>();
 ```
 
-Registration loads **every row and every translation** of every explicitly cached contract and every transitive `AutoInclude` dependency before returning. There is no lazy first-query loading, row limit, eviction policy, or automatic memory cap. A filtered query does not reduce the amount of data held by the cache. Choose tables whose complete contents fit your memory and startup budget.
+Registration loads **every row and every translation** of every discovered `BlueprintEntityRAM` contract before returning, including RAM entities discovered through relationships. Related `BlueprintEntityDB` tables remain in SQL. There is no lazy first-query loading, row limit, eviction policy, or automatic memory cap. A filtered query does not reduce the amount of data held by the cache. Choose tables whose complete contents fit your memory and startup budget.
 
-The annotation is not inherited by other contracts. Full entities include private copies of cached references and collections in the requested language; cyclic paths stop expanding when a type repeats.
+Any entity class derived from `BlueprintEntityRAM`, directly or through an intermediate base class, selects caching. Full entities include independent references and collections in the requested language, loaded through each target's executor; cyclic paths stop expanding when a type repeats.
 
-## Automatic caching of AutoInclude entities
+## AutoInclude data sources
 
-**An entity marked `[RAMCached]` automatically makes all entities reached through its `[AutoInclude]` relationships RAM cached.** The related interfaces do not need their own `[RAMCached]` annotation. This applies to both references and collections and follows the entire chain of `AutoInclude` relationships.
+**Every `AutoInclude` target uses its own executor.** A `BlueprintEntityRAM` parent does not turn DB children into cached entities. A `BlueprintEntityDB` parent does not force RAM children to be loaded from SQL.
 
-For example, if `Product` has `[RAMCached]` and `Product.VatCategory` has `[AutoInclude]`, then `ProductVatCategory` is cached even when its interface does not declare `[RAMCached]`. Any further `AutoInclude` relationships on `ProductVatCategory` are cached automatically as well.
+For example, if Product is DB and its included Category is RAM, the products are read from SQL and the categories from the current RAM snapshot. With a RAM Product and a DB Category, products come from RAM and categories from SQL. The same rule applies at each level of references and collections, including RAM → DB → RAM paths.
 
-Blueprint enables Change Tracking for every participating table and synchronizes their snapshots together using the database's `RAMCacheRefreshInterval`. This is automatic cache configuration; it does not add attributes to the entity source files. Relationships without `[AutoInclude]` do not inherit caching from the parent entity.
+Only RAM entity tables participate in cache loading and Change Tracking setup. `AutoInclude` determines which relationships to populate, not their storage mode. Related SQL rows are fetched in batches for the needed keys; RAM relationships use copied snapshot values. New SQL child values can therefore appear while a RAM parent or sibling still has older cached values. See [Query Executors](Database-Query-Executors.md) for consistency and transaction behavior.
 
 ## SQL Server requirements
 
@@ -41,7 +48,7 @@ SQL Server periodically removes Change Tracking metadata older than the configur
 
 The account needs the permissions for enabling those database and table settings when necessary, and permissions to read data and Change Tracking information, including `SELECT` and `VIEW CHANGE TRACKING` on tracked tables.
 
-Database-level settings can be applied before the schema transaction and remain enabled if registration later fails. Removing `[RAMCached]` or shutting down the application does not disable these SQL features automatically.
+Database-level settings can be applied before the schema transaction and remain enabled if registration later fails. Switching an entity to `BlueprintEntityDB` or shutting down the application does not disable these SQL features automatically. After rebuilding and registering the new DB model, that entity is read from SQL even when another RAM entity includes it.
 
 The cache still needs SQL Server for synchronization and persistence. It is not an offline data store.
 
@@ -69,7 +76,7 @@ To detect stale updates, declare a concurrency token on the entity contract. For
 
 ```csharp
 [Timestamp]
-byte[] Version { get; set; }
+public abstract byte[] Version { get; set; }
 ```
 
 SQL Server generates this `rowversion` value and changes it whenever the row is updated. Load the entity before editing it and preserve the token you read until saving; do not assign a new token yourself.
@@ -93,7 +100,7 @@ For explicit case/accent-insensitive title search, use [Contains with CompareOpt
 
 For `[Multilingual]` properties with `[FallbackToDefaultLanguage]`, both SQL and RAM reads use the default-language value when the selected translation is `null` or `""`. This also applies to cached filters, projections, counts, ordering, and paging. Whitespace-only translations are preserved. Cache snapshots retain the raw translations, so fallback does not change stored values or `CurrentLanguage`. See [Default-language fallback](Database-Multilingual-Entities.md#default-language-fallback).
 
-Full entities with `AutoInclude` use cached relationship snapshots. Direct automatically included reference paths can also be used in filters, sorting and projections; included collection predicates can read their scalar fields. Queries use SQL when they require unsupported cache behavior, including relationships outside the loaded include paths, navigation after projections or inside nested collection lambdas, `EF.Functions`, unsupported entity member access, or another queryable root. Custom methods and `NotMapped` properties can also cause SQL fallback. Fallback is not a guarantee that SQL can translate the expression; simplify unsupported expressions or apply application logic after materialization.
+Full entities with `AutoInclude` load each relationship through its target's executor. Direct automatically included reference paths can also be used in RAM filters, sorting and projections; included collection predicates can read their scalar fields. Such queries may read SQL child entities even though their root uses RAM. Queries use SQL when they require unsupported cache behavior, including relationships outside the loaded include paths, navigation after projections or inside nested collection lambdas, `EF.Functions`, unsupported entity member access, or another queryable root. Custom methods and `NotMapped` properties can also cause SQL fallback. Fallback is not a guarantee that SQL can translate the expression; simplify unsupported expressions or apply application logic after materialization.
 
 Queries inside an application transaction always use SQL so they see its uncommitted writes.
 

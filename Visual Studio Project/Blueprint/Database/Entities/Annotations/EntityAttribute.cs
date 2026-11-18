@@ -1,7 +1,7 @@
 namespace Blueprint.Database.Entities.Annotations
 {
-    /// <summary>Marks an interface as a persistent entity and optionally specifies its table.</summary>
-    [AttributeUsage(AttributeTargets.Interface, Inherited = false)]
+    /// <summary>Marks a class as a persistent entity and optionally specifies its table.</summary>
+    [AttributeUsage(AttributeTargets.Class, Inherited = false)]
     public sealed class EntityAttribute : Attribute
     {
         /// <summary>Sets the optional entity table name.</summary>
@@ -11,7 +11,7 @@ namespace Blueprint.Database.Entities.Annotations
             TableName = tableName;
         }
 
-        /// <summary>The table name, or null to use the interface name.</summary>
+        /// <summary>The table name, or null to use the class name.</summary>
         public string? TableName { get; }
 
         /// <summary>The SQL Server table schema.</summary>

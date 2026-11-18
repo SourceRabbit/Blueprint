@@ -191,7 +191,7 @@ namespace Blueprint.Tests.Tutorial1
                         throw new InvalidOperationException("Basket quantities must be positive.");
                     }
 
-                    // Transaction queries read SQL directly, including products marked with RAMCached.
+                    // Transaction queries read SQL directly, including products derived from BlueprintEntityRAM.
                     Product product = Product.SingleOrDefault(item => item.ID == basketItem.ProductID) ?? throw new InvalidOperationException("A basket product was not found.");
                     if (product.Stock < basketItem.Quantity)
                     {
@@ -221,93 +221,92 @@ namespace Blueprint.Tests.Tutorial1
 
     /// <summary>Describes a product with multilingual content, a price, and stock quantity.</summary>
     [Entity("Products")]
-    [RAMCached]
-    public interface Product : BlueprintEntity
+    public abstract class Product : BlueprintEntityRAM
     {
-        string SKU { get; set; }
+        public abstract string SKU { get; set; }
 
         [Multilingual]
-        string Title { get; set; }
+        public abstract string Title { get; set; }
 
         [Multilingual]
-        string ShortDescription { get; set; }
+        public abstract string ShortDescription { get; set; }
 
         [Multilingual]
-        string Description { get; set; }
+        public abstract string Description { get; set; }
 
         [Precision(18, 2)]
-        decimal Price { get; set; }
+        public abstract decimal Price { get; set; }
 
-        int Stock { get; set; }
+        public abstract int Stock { get; set; }
 
         [Timestamp]
-        byte[] Version { get; set; }
+        public abstract byte[] Version { get; set; }
     }
 
     /// <summary>Defines a website user for the checkout tutorial.</summary>
     [Entity("WebsiteUsers")]
-    public interface WebsiteUser : BlueprintEntity
+    public abstract class WebsiteUser : BlueprintEntityDB
     {
-        string FirstName { get; set; }
+        public abstract string FirstName { get; set; }
 
-        string LastName { get; set; }
+        public abstract string LastName { get; set; }
 
-        string Email { get; set; }
+        public abstract string Email { get; set; }
     }
 
     /// <summary>Stores one basket entry per user and product, without reserving stock.</summary>
     [Entity("BasketItems")]
     [EntityIndex("UX_BasketItems_WebsiteUserID_ProductID", nameof(WebsiteUserID), nameof(ProductID), IsUnique = true)]
-    public interface BasketItem : BlueprintEntity
+    public abstract class BasketItem : BlueprintEntityDB
     {
-        long WebsiteUserID { get; set; }
+        public abstract long WebsiteUserID { get; set; }
 
         [ForeignKey(nameof(WebsiteUserID))]
-        WebsiteUser WebsiteUser { get; set; }
+        public abstract WebsiteUser WebsiteUser { get; set; }
 
-        long ProductID { get; set; }
+        public abstract long ProductID { get; set; }
 
         [ForeignKey(nameof(ProductID))]
-        Product Product { get; set; }
+        public abstract Product Product { get; set; }
 
-        int Quantity { get; set; }
+        public abstract int Quantity { get; set; }
 
         [Timestamp]
-        byte[] Version { get; set; }
+        public abstract byte[] Version { get; set; }
     }
 
     /// <summary>Records a customer's completed purchase and its total at checkout.</summary>
     [Entity("Orders")]
-    public interface Order : BlueprintEntity
+    public abstract class Order : BlueprintEntityDB
     {
-        long WebsiteUserID { get; set; }
+        public abstract long WebsiteUserID { get; set; }
 
         [ForeignKey(nameof(WebsiteUserID))]
-        WebsiteUser WebsiteUser { get; set; }
+        public abstract WebsiteUser WebsiteUser { get; set; }
 
-        DateTime CreatedAtUtc { get; set; }
+        public abstract DateTime CreatedAtUtc { get; set; }
 
         [Precision(18, 2)]
-        decimal Total { get; set; }
+        public abstract decimal Total { get; set; }
     }
 
     /// <summary>Stores a purchased product, its quantity, and the unit price agreed at checkout.</summary>
     [Entity("OrderItems")]
-    public interface OrderItem : BlueprintEntity
+    public abstract class OrderItem : BlueprintEntityDB
     {
-        long OrderID { get; set; }
+        public abstract long OrderID { get; set; }
 
         [ForeignKey(nameof(OrderID))]
-        Order Order { get; set; }
+        public abstract Order Order { get; set; }
 
-        long ProductID { get; set; }
+        public abstract long ProductID { get; set; }
 
         [ForeignKey(nameof(ProductID))]
-        Product Product { get; set; }
+        public abstract Product Product { get; set; }
 
-        int Quantity { get; set; }
+        public abstract int Quantity { get; set; }
 
         [Precision(18, 2)]
-        decimal UnitPrice { get; set; }
+        public abstract decimal UnitPrice { get; set; }
     }
 }

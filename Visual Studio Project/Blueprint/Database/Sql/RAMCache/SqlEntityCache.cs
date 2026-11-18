@@ -20,7 +20,7 @@ namespace Blueprint.Database.Sql.RAMCache
         private bool fIsDisposed;
         private int fRefreshIsRunning;
 
-        /// <summary>Fully loads cached tables and their AutoInclude dependencies, then starts periodic synchronization.</summary>
+        /// <summary>Fully loads RAM entity tables, then starts periodic synchronization without caching related DB entities.</summary>
         /// <param name="database">The database that serializes context access.</param>
         /// <param name="context">The context after successful schema synchronization.</param>
         /// <param name="refreshInterval">The interval for checking external changes.</param>
@@ -33,14 +33,14 @@ namespace Blueprint.Database.Sql.RAMCache
             fRefreshInterval = refreshInterval;
             foreach (Type contract in context.EntityTypes.GetRAMCachedContracts())
             {
-                fRAMCachedTables.Add(contract, new RAMCachedTable(context, contract, fRAMCachedTables));
+                fRAMCachedTables.Add(contract, new RAMCachedTable(context, contract));
             }
             Refresh();
             fTimer = new Timer(RefreshInBackground, null, refreshInterval, refreshInterval);
         }
 
         /// <summary>Finds a cached table while preserving SQL reads inside application transactions.</summary>
-        /// <param name="contract">The registered entity interface.</param>
+        /// <param name="contract">The registered entity class.</param>
         /// <returns>The table, or null when no cached read is allowed.</returns>
         internal RAMCachedTable? GetTable(Type contract)
         {

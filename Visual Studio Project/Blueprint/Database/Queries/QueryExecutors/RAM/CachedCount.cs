@@ -2,7 +2,7 @@ using Blueprint.Database.Entities;
 using Microsoft.EntityFrameworkCore.Metadata;
 using System.Linq.Expressions;
 
-namespace Blueprint.Database.Queries.QueryExecutors.RAMCache
+namespace Blueprint.Database.Queries.QueryExecutors.RAM
 {
     /// <summary>Prepares Count with filters that read the shared cache without mutations or escaping mutable references.</summary>
     internal static class CachedCount
@@ -10,7 +10,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAMCache
         /// <summary>Combines consecutive Where filters and the optional Count predicate, preserving order and short-circuit behavior.</summary>
         /// <param name="expression">The terminal Count or LongCount expression.</param>
         /// <param name="provider">The provider of the single root.</param>
-        /// <param name="contract">The table interface.</param>
+        /// <param name="contract">The entity class.</param>
         /// <param name="concreteType">The generated class of the cached objects.</param>
         /// <param name="properties">The model's stored properties.</param>
         /// <param name="language">The language of the filters.</param>

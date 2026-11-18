@@ -2,7 +2,7 @@ using Blueprint.Database.Entities;
 using Microsoft.EntityFrameworkCore.Metadata;
 using System.Linq.Expressions;
 
-namespace Blueprint.Database.Queries.QueryExecutors.RAMCache
+namespace Blueprint.Database.Queries.QueryExecutors.RAM
 {
     /// <summary>Builds projected results from safe cached field reads without copying complete entities.</summary>
     internal static class CachedProjection
@@ -11,7 +11,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAMCache
         /// <typeparam name="TElement">The projected result type.</typeparam>
         /// <param name="expression">The complete projected sequence.</param>
         /// <param name="provider">The provider of the single entity root.</param>
-        /// <param name="contract">The entity interface.</param>
+        /// <param name="contract">The entity class.</param>
         /// <param name="concreteType">The generated type of the cached entities.</param>
         /// <param name="properties">The stored properties of the entity.</param>
         /// <param name="language">The selected language.</param>

@@ -3,7 +3,7 @@ using Blueprint.Database.Entities;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq.Expressions;
 
-namespace Blueprint.Database.Queries.QueryExecutors.RAMCache
+namespace Blueprint.Database.Queries.QueryExecutors.RAM
 {
     /// <summary>Allows cached include graphs while keeping unsupported relationships, providers, and EF functions on SQL.</summary>
     internal sealed class CachedQueryEligibility : ExpressionVisitor
@@ -14,7 +14,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAMCache
         private bool fCanExecute = true;
 
         /// <summary>Identifies the root table and its query provider.</summary>
-        /// <param name="contract">The root entity interface.</param>
+        /// <param name="contract">The root entity class.</param>
         /// <param name="provider">The root collection's provider.</param>
         private CachedQueryEligibility(Type contract, IQueryProvider provider)
         {
@@ -23,7 +23,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAMCache
         }
 
         /// <summary>Checks whether the query can run on independent cached entity graphs.</summary>
-        /// <param name="contract">The entity interface.</param>
+        /// <param name="contract">The entity class.</param>
         /// <param name="expression">The complete LINQ expression.</param>
         /// <param name="provider">The root collection's provider.</param>
         /// <param name="includeRelated">Whether the result requires AutoInclude relationships to be loaded.</param>

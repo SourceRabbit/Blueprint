@@ -6,6 +6,8 @@ The Entity API keeps the same signatures for reads and writes. The former `Colle
 
 Examples use the [Product contract](Database-Tutorial-EShop-Checkout.md#define-a-contract). `productID` represents an existing product ID supplied by your application. Run each write example independently and use unique SKUs when inserting again.
 
+Both DB and RAM entity classes use this same LINQ syntax. Blueprint selects `QueryExecutor_Database` for `BlueprintEntityDB` and `QueryExecutor_RAM` for `BlueprintEntityRAM`. Every `AutoInclude` target selects its own executor independently of its parent, so results can contain both SQL and RAM entities. See [Query Executors](Database-Query-Executors.md) for a release-year/price example and mixed-source behavior.
+
 ## Filter, order, and page
 
 ```csharp
@@ -197,7 +199,7 @@ Separate direct CRUD calls are not one shared atomic transaction. Use [Transacti
 
 SQL queries must be translatable by the provider. Arbitrary C# methods and `NotMapped` getters do not automatically become SQL. Materialize a suitably filtered set before applying application-only logic.
 
-For `[RAMCached]` contracts, eligible queries execute against in-memory snapshots; others use SQL. In-memory string comparisons can differ from the database collation. Returned entities remain independent objects. See [RAM Caching](Database-RAM-Caching.md) for query routing and paging behavior.
+For `BlueprintEntityRAM` contracts, eligible queries execute against in-memory snapshots; others use SQL. In-memory string comparisons can differ from the database collation. Returned entities remain independent objects. See [RAM Caching](Database-RAM-Caching.md) for query routing and paging behavior.
 
 ## Related topics
 

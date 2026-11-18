@@ -1,6 +1,6 @@
 # Data Annotations
 
-Annotations on an entity interface describe its SQL mapping, constraints, relationships, and optional behavior. Apply them to the contract before registering it. Registration reads the annotations and synchronizes supported schema changes.
+Annotations on an entity class describe its SQL mapping, constraints, relationships, and optional behavior. Apply them to the contract before registering it. Registration reads the annotations and synchronizes supported schema changes.
 
 ## Annotation reference
 
@@ -10,8 +10,7 @@ Annotations on an entity interface describe its SQL mapping, constraints, relati
 | `EntityIndex` | `Blueprint.Database.Entities.Annotations` | Defines a named index over mapped properties; `IsUnique` defaults to false. |
 | `Multilingual` | `Blueprint.Database.Entities.Annotations` | Stores a separate value for each configured language. |
 | `FallbackToDefaultLanguage` | `Blueprint.Database.Entities.Annotations` | Requires `Multilingual`; reads the default value when the selected translation is null or empty, without changing stored translations. |
-| `RAMCached` | `Blueprint.Database.Entities.Annotations` | Enables full-table RAM caching for this contract and automatically for all its transitive `AutoInclude` entities, even without their own `RAMCached` annotation. See [automatic caching of AutoInclude entities](Database-RAM-Caching.md#automatic-caching-of-autoinclude-entities). |
-| `AutoInclude` | `Blueprint.Database.Entities.Annotations` | Automatically loads the annotated navigation when reading entities. When reached from a RAM-cached entity, the related entity is automatically RAM cached too. |
+| `AutoInclude` | `Blueprint.Database.Entities.Annotations` | Automatically loads the navigation through the target entity's own DB or RAM executor, independently of the parent's source. |
 | `Required` | `System.ComponentModel.DataAnnotations` | Requires a stored value. For multilingual fields, applies to every language. |
 | `MaxLength`, `StringLength` | `System.ComponentModel.DataAnnotations` | Sets the maximum stored length. `StringLength.MinimumLength` is not a database validation rule. |
 | `Timestamp` | `System.ComponentModel.DataAnnotations` | Maps a SQL Server rowversion concurrency token. |
@@ -22,6 +21,8 @@ Annotations on an entity interface describe its SQL mapping, constraints, relati
 | `Precision` | `Microsoft.EntityFrameworkCore` | Sets decimal precision and scale. |
 | `DefaultValue` | `System.ComponentModel` | Configures a SQL default for the column. |
 | `ReadOnly(true)` | `System.ComponentModel` | Allows an initial value but rejects later changes when saving. |
+
+Caching is selected by deriving the entity class from `BlueprintEntityRAM`; the former `[RAMCached]` annotation has been removed. `AutoInclude` never enables caching for a `BlueprintEntityDB` class. See [AutoInclude data sources](Database-RAM-Caching.md#autoinclude-data-sources).
 
 Blueprint does not run a general form-validation pipeline for every .NET validation attribute. Validate user input in your application; use [transaction validation](Database-Transactions.md#validate-before-commit) for checks that must succeed before database commit.
 
@@ -41,22 +42,22 @@ namespace BlueprintManual
     /// <summary>Describes a catalog category with an immutable code and concurrency token.</summary>
     [Entity("Categories", Schema = "catalog")]
     [EntityIndex("UX_Categories_Code", nameof(Code), IsUnique = true)]
-    public interface Category : BlueprintEntity
+    public abstract class Category : BlueprintEntityDB
     {
         [Required, MaxLength(40), ReadOnly(true)]
-        string Code { get; set; }
+        public abstract string Code { get; set; }
 
         [Column("DisplayName"), MaxLength(200)]
-        string Name { get; set; }
+        public abstract string Name { get; set; }
 
         [DefaultValue(0)]
-        int SortOrder { get; set; }
+        public abstract int SortOrder { get; set; }
 
         [Timestamp]
-        byte[] Version { get; set; }
+        public abstract byte[] Version { get; set; }
 
         [NotMapped]
-        string DisplayLabel
+        public string DisplayLabel
         {
             get
             {
@@ -83,7 +84,7 @@ Use `[FallbackToDefaultLanguage]` on a mapped `[Multilingual]` string to opt int
 
 `ReadOnly(true)` leaves the setter available for initialization. Later changes are rejected on save, including changes to individual translations. This is a persistence rule and does not add a SQL constraint that prevents another application from editing the column.
 
-`NotMapped` can expose a computed interface getter, as above. Evaluate it after loading the entity. A query using that property may not translate to SQL; a C# getter is not automatically a SQL expression.
+`NotMapped` can expose a computed class getter, as above. Evaluate it after loading the entity. A query using that property may not translate to SQL; a C# getter is not automatically a SQL expression.
 
 ## Concurrency
 

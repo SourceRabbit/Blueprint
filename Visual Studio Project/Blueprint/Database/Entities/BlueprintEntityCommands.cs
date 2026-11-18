@@ -7,8 +7,8 @@ using System.Linq.Expressions;
 namespace Blueprint.Database.Entities
 {
     /// <summary>Persists entity changes immediately through SQL and invalidates cached snapshots.</summary>
-    /// <typeparam name="TEntity">The registered entity interface.</typeparam>
-    internal sealed class BlueprintEntityCommands<TEntity> where TEntity : class, BlueprintEntity
+    /// <typeparam name="TEntity">The registered entity class.</typeparam>
+    internal sealed class BlueprintEntityCommands<TEntity> where TEntity : BlueprintEntity
     {
         private readonly BlueprintDatabase fDatabase;
         private readonly long fLanguage;
@@ -134,7 +134,7 @@ namespace Blueprint.Database.Entities
                 Expression<Func<TEntity, bool>> filter = (Expression<Func<TEntity, bool>>)new TextSearchQuery().Visit(translated)!;
                 try
                 {
-                    return context.Query<TEntity>(false).Where(filter).ExecuteDelete();
+                    return context.Query<TEntity>().Where(filter).ExecuteDelete();
                 }
                 finally
                 {

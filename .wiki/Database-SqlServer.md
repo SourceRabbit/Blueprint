@@ -130,7 +130,7 @@ The provider requires a server value, rejects `AttachDBFilename`, and does not a
 
 The following standalone `Program.cs` adapts the tutorial with `public static void Main()` and private static fields. It includes Product and the three iPhone inserts. Use this as one complete example, rather than combining it with another `Main()` from the manual.
 
-It uses the local Windows-authentication connection string, English and Greek, and a five-second cache refresh interval. Product has `[RAMCached]`, so the account also needs the cache permissions described below.
+It uses the local Windows-authentication connection string, English and Greek, and a five-second cache refresh interval. Product derives from `BlueprintEntityRAM`, so the account also needs the cache permissions described below.
 
 ```csharp
 using Blueprint.Database;
@@ -233,24 +233,23 @@ namespace BlueprintManual
 
     /// <summary>Describes a product with multilingual content, a price, and stock quantity.</summary>
     [Entity("Products")]
-    [RAMCached]
-    public interface Product : BlueprintEntity
+    public abstract class Product : BlueprintEntityRAM
     {
-        string SKU { get; set; }
+        public abstract string SKU { get; set; }
 
         [Multilingual]
-        string Title { get; set; }
+        public abstract string Title { get; set; }
 
         [Multilingual]
-        string ShortDescription { get; set; }
+        public abstract string ShortDescription { get; set; }
 
         [Multilingual]
-        string Description { get; set; }
+        public abstract string Description { get; set; }
 
         [Precision(18, 2)]
-        decimal Price { get; set; }
+        public abstract decimal Price { get; set; }
 
-        int Stock { get; set; }
+        public abstract int Stock { get; set; }
     }
 }
 ```
@@ -271,9 +270,9 @@ The refresh interval configures polling while the database is active. This conso
 
 Use `database.RegisterEntity<Product>()` to add a contract. The equivalent overload is `database.RegisterEntity(typeof(Product))`; these are alternative forms of the same registration.
 
-Each contract must be a public interface extending `BlueprintEntity`, marked with `[Entity]`. Related entity contracts are discovered from registered contracts; Blueprint does not scan all loaded assemblies for entities.
+Each contract must be a public, non-sealed class deriving from `BlueprintEntityDB` or `BlueprintEntityRAM`, marked with `[Entity]`. Related entity contracts are discovered from registered contracts; Blueprint does not scan all loaded assemblies for entities.
 
-Registration performs provider work immediately. With SQL Server, it synchronizes the schema and loads every registered `[RAMCached]` table, including its translations, before returning. Repeating registration for the same type synchronizes again without adding a duplicate registration.
+Registration performs provider work immediately. With SQL Server, it synchronizes the schema and loads every discovered `BlueprintEntityRAM` table, including its translations, before returning. Related DB entities remain SQL-backed. Repeating registration for the same type synchronizes again without adding a duplicate registration.
 
 New contracts can also be registered through `database` after database initialization. If synchronization or cache loading fails, a newly added registration is removed and the previous active model and cache remain available. This does not mean every SQL Server configuration change is undone; see [Schema Synchronization](Database-Entities-Schema-Synchronization.md) and [RAM Caching](Database-RAM-Caching.md) for details.
 
@@ -288,7 +287,7 @@ New contracts can also be registered through `database` after database initializ
 | `Languages` | Gets the independent, read-only language configuration. |
 | `Dispose()` | Clears the active database, releases resources, and prevents further data operations. |
 
-`RAMCacheRefreshInterval` accepts values from one millisecond through the supported timer range, and can be changed before or after entity registration. It configures polling for entities marked `[RAMCached]`; it does not enable caching on other entities. The interval is not a guaranteed maximum delay before external changes become visible. See [RAM Caching](Database-RAM-Caching.md).
+`RAMCacheRefreshInterval` accepts values from one millisecond through the supported timer range, and can be changed before or after entity registration. It configures polling only for entities derived from `BlueprintEntityRAM`; AutoInclude DB targets use their database executor. The interval is not a guaranteed maximum delay before external changes become visible. See [RAM Caching](Database-RAM-Caching.md).
 
 The languages are configured at construction and exposed through `BlueprintDatabase.Languages`, not through a writable database property. To use another connection or language configuration, create a new database instance and register its entities.
 
@@ -348,7 +347,7 @@ This synchronization does not make concurrent edits to an entity object safe, an
 
 The current provider needs a SQL identity that can connect to `master` and the application database. When objects are missing, initialization and registration also need permissions to create the database and synchronize its tables, columns, indexes, and sequences. Product insertion needs the corresponding write permissions.
 
-Because the tutorial marks Product with `[RAMCached]`, registration prepares SQL Server Change Tracking and snapshot isolation. Enabling missing settings requires the corresponding `ALTER DATABASE` and `ALTER TABLE` permissions. Reading the cache requires `SELECT` and `VIEW CHANGE TRACKING` on the relevant tables. Existing settings can already be provisioned by an administrator. See [RAM caching requirements](Database-RAM-Caching.md#sql-server-requirements) and [Schema Synchronization](Database-Entities-Schema-Synchronization.md).
+Because the tutorial derives Product from `BlueprintEntityRAM`, registration prepares SQL Server Change Tracking and snapshot isolation. Enabling missing settings requires the corresponding `ALTER DATABASE` and `ALTER TABLE` permissions. Reading the cache requires `SELECT` and `VIEW CHANGE TRACKING` on the relevant tables. Existing settings can already be provisioned by an administrator. See [RAM caching requirements](Database-RAM-Caching.md#sql-server-requirements) and [Schema Synchronization](Database-Entities-Schema-Synchronization.md).
 
 ## Connection and initialization problems
 
@@ -359,7 +358,7 @@ Because the tutorial marks Product with `[RAMCached]`, registration prepares SQL
 | Certificate validation fails | Check the server certificate's trust, expiry, and host name. Keep the local-development exception separate from deployment settings. |
 | A different database is selected than expected | Check the first `SqlDatabase` constructor argument; it overrides the connection string's database value. |
 | Construction fails even though the database exists | This provider still connects to `master` during its initial check; inspect the exception and the account's access. |
-| Construction succeeds but registration fails | Inspect schema compatibility and permissions; `[RAMCached]` also needs Change Tracking and snapshot isolation. |
+| Construction succeeds but registration fails | Inspect schema compatibility and permissions; `BlueprintEntityRAM` also needs Change Tracking and snapshot isolation. |
 
 Use the SQL exception and its inner exception to identify the failing stage. General setup and persistence errors are covered in [Troubleshooting](Troubleshooting.md).
 

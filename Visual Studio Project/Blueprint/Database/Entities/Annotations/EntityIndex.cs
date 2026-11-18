@@ -1,7 +1,7 @@
 namespace Blueprint.Database.Entities.Annotations
 {
-    /// <summary>Declares an index on stored properties of a BlueprintEntity interface.</summary>
-    [AttributeUsage(AttributeTargets.Interface, AllowMultiple = true)]
+    /// <summary>Declares an index on stored properties of a BlueprintEntity class.</summary>
+    [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
     public sealed class EntityIndex : Attribute
     {
         private readonly string fName;

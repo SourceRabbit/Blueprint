@@ -13,6 +13,8 @@ This guide explains how to add Blueprint to your .NET project, either through a 
 
 Blueprint currently provides SQL Server support through `SqlDatabase`. See [SQL Server](Database-SqlServer.md) for connection settings, registration, and application lifetime.
 
+Entities are public, non-sealed classes derived from `BlueprintEntityDB` or `BlueprintEntityRAM`, with `[Entity]` on each registered class. Both persist in SQL; the RAM base also enables synchronized caching. Existing interface-based entities must be migrated and consumers rebuilt. See [entity class requirements and migration](Database-Entities-BlueprintEntity.md#migrating-existing-entities).
+
 ## Prepare your project
 
 Create a .NET application or open your existing project, and confirm that its target framework is .NET 10. Choose one of the following reference methods for the consuming project.

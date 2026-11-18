@@ -124,7 +124,7 @@ Replace `123` with the intended existing product ID; an unmatched ID affects zer
 
 ### RegisterEntity
 
-Register a contract with `database.RegisterEntity<Product>()` or the equivalent `database.RegisterEntity(typeof(Product))`. A contract must be a public interface extending `BlueprintEntity` and marked with `[Entity]`. See [BlueprintEntity](Database-Entities-BlueprintEntity.md) for contract definitions.
+Register a contract with `database.RegisterEntity<Product>()` or the equivalent `database.RegisterEntity(typeof(Product))`. A contract must be a public, non-sealed class deriving from `BlueprintEntityDB` or `BlueprintEntityRAM` and marked with `[Entity]`. See [BlueprintEntity](Database-Entities-BlueprintEntity.md) for contract definitions.
 
 Both overloads return `void`. The generic overload takes the contract as `TEntity`; the other overload accepts an `entityType` parameter of type `Type`. A null or invalid contract is rejected, and registration after disposal throws `ObjectDisposedException`.
 

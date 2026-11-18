@@ -18,33 +18,33 @@ namespace BlueprintManual
 {
     /// <summary>Describes a brand and its related products.</summary>
     [Entity("Brands")]
-    public interface Brand : BlueprintEntity
+    public abstract class Brand : BlueprintEntityDB
     {
         [MaxLength(200)]
-        string Name { get; set; }
+        public abstract string Name { get; set; }
 
         [InverseProperty(nameof(Product.Brand))]
-        ICollection<Product> Products { get; set; }
+        public abstract ICollection<Product> Products { get; set; }
     }
 
     /// <summary>Describes a product with an optional brand.</summary>
     [Entity("Products")]
     [EntityIndex("UX_Products_SKU", nameof(SKU), IsUnique = true)]
-    public interface Product : BlueprintEntity
+    public abstract class Product : BlueprintEntityDB
     {
         [MaxLength(64)]
-        string SKU { get; set; }
+        public abstract string SKU { get; set; }
 
         [Multilingual, MaxLength(200)]
-        string? Title { get; set; }
+        public abstract string? Title { get; set; }
 
         [Precision(18, 2)]
-        decimal Price { get; set; }
+        public abstract decimal Price { get; set; }
 
-        long? BrandID { get; set; }
+        public abstract long? BrandID { get; set; }
 
         [ForeignKey(nameof(BrandID)), AutoInclude]
-        Brand? Brand { get; set; }
+        public abstract Brand? Brand { get; set; }
     }
 }
 ```
@@ -62,7 +62,7 @@ Console.WriteLine(product?.Brand?.Name);
 
 `AutoInclude` on `Product.Brand` loads the reference when the product is materialized. An inverse collection defines the relationship; it does not by itself request automatic loading. Add `AutoInclude` only to navigations that you need automatically, avoiding cycles and unnecessarily large object graphs.
 
-Relationship queries and automatic includes use SQL when RAM caching cannot satisfy them. The query's selected language also applies to materialized related entities. Relationships themselves always use the same ID across languages.
+Each `AutoInclude` target selects its own executor from its base class: DB targets read SQL and RAM targets read the synchronized cache, regardless of the parent's source. This works for both references and collections and continues through nested relationships. `AutoInclude` does not enable caching for DB classes. The query's selected language also applies to related entities, and relationships use the same ID across languages. Inside a transaction, the entire graph reads SQL. See [Query Executors](Database-Query-Executors.md) for examples, query evaluation, and consistency.
 
 ## Insert a parent and child together
 

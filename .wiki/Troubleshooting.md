@@ -9,7 +9,9 @@ Start with the exception and its inner exceptions, the operation being performed
 | Static methods such as `Product.Create()` are not found | Import `Blueprint.Database.Entities`, use .NET 10 with C# 14, and reference the intended Blueprint assembly. |
 | A previously valid API call no longer builds after replacing a DLL | Rebuild consumers against the same DLL and compatible dependencies. Transactions now use `database.TransactionFactory`; see [Transactions](Database-Transactions.md). |
 | `SqlDatabase` construction fails | Check server reachability, authentication, certificate configuration, and permissions to access or create the named database. Construction connects immediately. |
-| An entity cannot be created or queried | Ensure it is a public interface extending `BlueprintEntity`, has `[Entity]`, is registered, and the database has initialized successfully. |
+| An entity cannot be created or queried | Ensure it is a public, non-sealed class deriving from `BlueprintEntityDB` or `BlueprintEntityRAM`, has `[Entity]`, is registered, and the database has initialized successfully. |
+| An old interface or `[RAMCached]` declaration no longer compiles | Migrate the contract to a class with the appropriate DB/RAM base, add public abstract properties or implemented class properties, remove the cache annotation, and rebuild consumers. See [migration steps](Database-Entities-BlueprintEntity.md#migrating-existing-entities). |
+| Class registration rejects a constructor or property | Supply a public or protected parameterless constructor, public mapped accessors, and abstract or virtual multilingual properties. Do not seal the class, hide inherited properties, or leave custom abstract methods unimplemented. |
 | A second database cannot be activated | Keep one active database. Stop dependent background work and dispose the old database before switching. |
 | Language validation fails | Supply a nonempty list with unique IDs and case-insensitively unique prefixes, exactly one empty prefix, and no null or whitespace-only prefixes. |
 | Registration fails after adding a required field | Existing rows may need a default or explicit data migration. Blueprint does not invent required values. |
@@ -50,6 +52,8 @@ See [Transactions](Database-Transactions.md) for the full execution and restorat
 | --- | --- |
 | Cache startup fails | Verify Change Tracking, snapshot isolation, SQL permissions, and memory for all selected tables and translations. |
 | Another application's update is not visible yet | Wait for a successful synchronization and run a new query. Already loaded objects are not refreshed. The polling interval is not a strict freshness bound. |
+| Included objects show different freshness | Each target uses its own DB or RAM executor. SQL children can reflect recent writes while RAM parents or siblings still reflect a cached snapshot. Use a transaction when the whole graph must read SQL under one isolation scope. |
+| A DB entity included by a RAM entity is not cached | This is intentional. `AutoInclude` requests loading and does not enable caching. Derive the target from `BlueprintEntityRAM` if its reads should use RAM. |
 | Cached reads fail after a refresh error | Resolve the SQL or tracking problem. Reads retry synchronization and propagate continued failure. |
 | Cache is inconsistent after database restore | Dispose the old database and initialize a new database instance. Change Tracking does not reliably identify replacement database backups. |
 | Background task never runs | Keep the manager alive, call `Start()`, verify registration and schedule, and subscribe to `TaskFailed`. Interval tasks first run after their interval. |

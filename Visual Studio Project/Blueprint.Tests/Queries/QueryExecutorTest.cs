@@ -124,19 +124,19 @@ namespace Blueprint.Tests.Queries
 
     /// <summary>Ορίζει αριθμητικό φίλτρο και πολύγλωσσο κείμενο για τους ελέγχους σύνθεσης queries.</summary>
     [Entity("QueryExecutorProducts")]
-    public interface ExecutorProduct : BlueprintEntity
+    public abstract class ExecutorProduct : BlueprintEntityDB
     {
         [Precision(18, 2)]
-        decimal Price { get; set; }
+        public abstract decimal Price { get; set; }
 
         [Multilingual, FallbackToDefaultLanguage]
-        string? Title { get; set; }
+        public abstract string? Title { get; set; }
     }
 
     /// <summary>Προκαλεί αναδημιουργία του μοντέλου για έλεγχο των ήδη συντεθειμένων queries.</summary>
     [Entity("QueryExecutorCategories")]
-    public interface ExecutorCategory : BlueprintEntity
+    public abstract class ExecutorCategory : BlueprintEntityDB
     {
-        string? Name { get; set; }
+        public abstract string? Name { get; set; }
     }
 }

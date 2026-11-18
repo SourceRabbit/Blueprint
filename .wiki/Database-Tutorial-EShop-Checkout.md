@@ -1,6 +1,6 @@
 # EShop - Checkout Tutorial
 
-An entity is a public interface that extends `Blueprint.Database.Entities.BlueprintEntity` and has an `[Entity]` annotation. Blueprint generates its implementation when the contract is registered.
+An entity is a public, non-sealed class that derives from `BlueprintEntityDB` or `BlueprintEntityRAM` in `Blueprint.Database.Entities` and has an `[Entity]` annotation. Blueprint generates a concrete subclass when the contract is registered.
 
 This guide follows [EntitiesTutorial](../Visual%20Studio%20Project/Blueprint.Tests/Tutorial1/EntitiesTutorial.cs): create a website user, add one iPhone to the user's basket, and complete checkout. Checkout saves an order and its items, reduces product stock, and clears the purchased basket in one database transaction.
 
@@ -13,31 +13,30 @@ The tutorial keeps the existing Product contract, including multilingual content
 ```csharp
 /// <summary>Describes a product with multilingual content, a price, and stock quantity.</summary>
 [Entity("Products")]
-[RAMCached]
-public interface Product : BlueprintEntity
+public abstract class Product : BlueprintEntityRAM
 {
-    string SKU { get; set; }
+    public abstract string SKU { get; set; }
 
     [Multilingual]
-    string Title { get; set; }
+    public abstract string Title { get; set; }
 
     [Multilingual]
-    string ShortDescription { get; set; }
+    public abstract string ShortDescription { get; set; }
 
     [Multilingual]
-    string Description { get; set; }
+    public abstract string Description { get; set; }
 
     [Precision(18, 2)]
-    decimal Price { get; set; }
+    public abstract decimal Price { get; set; }
 
-    int Stock { get; set; }
+    public abstract int Stock { get; set; }
 
     [Timestamp]
-    byte[] Version { get; set; }
+    public abstract byte[] Version { get; set; }
 }
 ```
 
-`[Entity("Products")]` maps this contract to `dbo.Products`. `[Multilingual]` stores separate English and Greek values for the three text properties; `SKU`, `Price`, and `Stock` are shared. `[Precision(18, 2)]` configures the price's decimal precision. `[RAMCached]` enables caching for eligible Product queries.
+`[Entity("Products")]` maps this contract to `dbo.Products`. `[Multilingual]` stores separate English and Greek values for the three text properties; `SKU`, `Price`, and `Stock` are shared. `[Precision(18, 2)]` configures the price's decimal precision. Deriving from `BlueprintEntityRAM` enables caching for eligible Product queries.
 
 `[Timestamp]`, from `System.ComponentModel.DataAnnotations`, maps `Version` to a SQL Server `rowversion` concurrency token. SQL Server generates the value on insert and changes it whenever the row is updated. It is not a date or time. Blueprint checks the version read by the consumer when saving an update, so a stale entity cannot silently overwrite a newer version. RAM caching alone does not provide this protection.
 
@@ -72,7 +71,7 @@ The unique index on `BasketItem` allows only one row per `WebsiteUserID` and `Pr
 
 The following standalone `Program.cs` contains all five contracts and all helper methods. It adapts the test's `RunTest()` to `public static void Main()`, removes the `BlueprintTest` inheritance, and makes the shared fields and helpers static. Use this complete file once; the snippets in the walkthrough below explain excerpts from it.
 
-The example connects to local `SQLEXPRESS` and uses `MyEshopDatabase`, English, and Greek. Configure the connection for your environment using the [SQL Server guide](Database-SqlServer.md). Product's `[RAMCached]` annotation also requires the [SQL Server caching setup](Database-RAM-Caching.md#sql-server-requirements).
+The example connects to local `SQLEXPRESS` and uses `MyEshopDatabase`, English, and Greek. Configure the connection for your environment using the [SQL Server guide](Database-SqlServer.md). Product's `BlueprintEntityRAM` base class also requires the [SQL Server caching setup](Database-RAM-Caching.md#sql-server-requirements).
 
 Each execution inserts three new sample products and a new user, then purchases the iPhone 15 inserted by that execution. The tutorial does not reuse an existing customer or deduplicate SKUs. Prices and quantities are demonstration values.
 
@@ -274,7 +273,7 @@ namespace BlueprintManual
                         throw new InvalidOperationException("Basket quantities must be positive.");
                     }
 
-                    // Transaction queries read SQL directly, including products marked with RAMCached.
+                    // Transaction queries read SQL directly, including products derived from BlueprintEntityRAM.
                     Product product = Product.SingleOrDefault(item => item.ID == basketItem.ProductID) ?? throw new InvalidOperationException("A basket product was not found.");
                     if (product.Stock < basketItem.Quantity)
                     {
@@ -304,94 +303,93 @@ namespace BlueprintManual
 
     /// <summary>Describes a product with multilingual content, a price, and stock quantity.</summary>
     [Entity("Products")]
-    [RAMCached]
-    public interface Product : BlueprintEntity
+    public abstract class Product : BlueprintEntityRAM
     {
-        string SKU { get; set; }
+        public abstract string SKU { get; set; }
 
         [Multilingual]
-        string Title { get; set; }
+        public abstract string Title { get; set; }
 
         [Multilingual]
-        string ShortDescription { get; set; }
+        public abstract string ShortDescription { get; set; }
 
         [Multilingual]
-        string Description { get; set; }
+        public abstract string Description { get; set; }
 
         [Precision(18, 2)]
-        decimal Price { get; set; }
+        public abstract decimal Price { get; set; }
 
-        int Stock { get; set; }
+        public abstract int Stock { get; set; }
 
         [Timestamp]
-        byte[] Version { get; set; }
+        public abstract byte[] Version { get; set; }
     }
 
     /// <summary>Defines a website user for the checkout tutorial.</summary>
     [Entity("WebsiteUsers")]
-    public interface WebsiteUser : BlueprintEntity
+    public abstract class WebsiteUser : BlueprintEntityDB
     {
-        string FirstName { get; set; }
+        public abstract string FirstName { get; set; }
 
-        string LastName { get; set; }
+        public abstract string LastName { get; set; }
 
-        string Email { get; set; }
+        public abstract string Email { get; set; }
     }
 
     /// <summary>Stores one basket entry per user and product, without reserving stock.</summary>
     [Entity("BasketItems")]
     [EntityIndex("UX_BasketItems_WebsiteUserID_ProductID", nameof(WebsiteUserID), nameof(ProductID), IsUnique = true)]
-    public interface BasketItem : BlueprintEntity
+    public abstract class BasketItem : BlueprintEntityDB
     {
-        long WebsiteUserID { get; set; }
+        public abstract long WebsiteUserID { get; set; }
 
         [ForeignKey(nameof(WebsiteUserID))]
-        WebsiteUser WebsiteUser { get; set; }
+        public abstract WebsiteUser WebsiteUser { get; set; }
 
-        long ProductID { get; set; }
+        public abstract long ProductID { get; set; }
 
         [ForeignKey(nameof(ProductID))]
-        Product Product { get; set; }
+        public abstract Product Product { get; set; }
 
-        int Quantity { get; set; }
+        public abstract int Quantity { get; set; }
 
         [Timestamp]
-        byte[] Version { get; set; }
+        public abstract byte[] Version { get; set; }
     }
 
     /// <summary>Records a customer's completed purchase and its total at checkout.</summary>
     [Entity("Orders")]
-    public interface Order : BlueprintEntity
+    public abstract class Order : BlueprintEntityDB
     {
-        long WebsiteUserID { get; set; }
+        public abstract long WebsiteUserID { get; set; }
 
         [ForeignKey(nameof(WebsiteUserID))]
-        WebsiteUser WebsiteUser { get; set; }
+        public abstract WebsiteUser WebsiteUser { get; set; }
 
-        DateTime CreatedAtUtc { get; set; }
+        public abstract DateTime CreatedAtUtc { get; set; }
 
         [Precision(18, 2)]
-        decimal Total { get; set; }
+        public abstract decimal Total { get; set; }
     }
 
     /// <summary>Stores a purchased product, its quantity, and the unit price agreed at checkout.</summary>
     [Entity("OrderItems")]
-    public interface OrderItem : BlueprintEntity
+    public abstract class OrderItem : BlueprintEntityDB
     {
-        long OrderID { get; set; }
+        public abstract long OrderID { get; set; }
 
         [ForeignKey(nameof(OrderID))]
-        Order Order { get; set; }
+        public abstract Order Order { get; set; }
 
-        long ProductID { get; set; }
+        public abstract long ProductID { get; set; }
 
         [ForeignKey(nameof(ProductID))]
-        Product Product { get; set; }
+        public abstract Product Product { get; set; }
 
-        int Quantity { get; set; }
+        public abstract int Quantity { get; set; }
 
         [Precision(18, 2)]
-        decimal UnitPrice { get; set; }
+        public abstract decimal UnitPrice { get; set; }
     }
 }
 ```
@@ -508,7 +506,7 @@ if (product.Stock < basketItem.Quantity)
 }
 ```
 
-Queries inside a Blueprint transaction use SQL, including queries for `[RAMCached]` products. The decision therefore uses the stock read from SQL within this transaction, rather than a previously returned object or cached basket-screen value.
+Queries inside a Blueprint transaction use SQL, including queries for products derived from `BlueprintEntityRAM`. The decision therefore uses the stock read from SQL within this transaction, rather than a previously returned object or cached basket-screen value.
 
 ### 7. Prepare the order and preserve the purchase price
 
@@ -660,7 +658,7 @@ Both contracts declare:
 
 ```csharp
 [Timestamp]
-byte[] Version { get; set; }
+public abstract byte[] Version { get; set; }
 ```
 
 - `[Timestamp]`, from `System.ComponentModel.DataAnnotations`, configures the property as a database-generated concurrency token.
@@ -717,7 +715,7 @@ The token also protects against lost updates when two writers change different p
 
 **With `Version`, the administrator's stale update fails with `DbUpdateConcurrencyException`, and stock remains 19.** The consumer can reload the current product, reapply only the intended description change while preserving the current stock and token, and attempt the update again. Any further concurrent change is checked on that attempt as well.
 
-This protection is useful whether or not Product is `[RAMCached]`. A cached read can return an older version until synchronization completes, and refreshing the cache does not update an object already loaded by the administrator. Keep using current SQL reads inside the checkout transaction for the final price and stock decision, as this tutorial does.
+This protection is useful whether Product derives from `BlueprintEntityDB` or `BlueprintEntityRAM`. A cached read can return an older version until synchronization completes, and refreshing the cache does not update an object already loaded by the administrator. Keep using current SQL reads inside the checkout transaction for the final price and stock decision, as this tutorial does.
 
 ### Protect the checkout decision with transaction isolation
 

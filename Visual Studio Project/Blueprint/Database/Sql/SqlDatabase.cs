@@ -3,7 +3,7 @@ using System.Linq;
 using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Data.SqlClient;
-using Blueprint.Database.Entities.Annotations;
+using Blueprint.Database.Entities;
 using Blueprint.Database.Sql.RAMCache;
 using Blueprint.Fundamentals;
 
@@ -159,7 +159,7 @@ namespace Blueprint.Database.Sql
             }
         }
 
-        /// <summary>Synchronizes the schema and fully loads RAMCached entities after each registration, retaining the previous model on failure.</summary>
+        /// <summary>Synchronizes the schema and fully loads RAM-cached entities after each registration, retaining the previous model on failure.</summary>
         /// <exception cref="ObjectDisposedException">The database has been disposed.</exception>
         /// <exception cref="InvalidOperationException">An entity has an invalid table mapping or the cache cannot be synchronized.</exception>
         /// <exception cref="NotSupportedException">The mapping requires a table rename.</exception>
@@ -178,7 +178,7 @@ namespace Blueprint.Database.Sql
                         SqlChangeTracking.InitializeDatabase(context);
                         SqlSchemaInitializer.Initialize(context);
                         BlueprintDatabaseContext entityContext = (BlueprintDatabaseContext)context;
-                        cache = entityContext.EntityTypes.Types.Keys.Any(contract => contract.IsDefined(typeof(RAMCached), false)) ? new SqlEntityCache(this, entityContext, RAMCacheRefreshInterval) : null;
+                        cache = entityContext.EntityTypes.Types.Keys.Any(contract => typeof(BlueprintEntityRAM).IsAssignableFrom(contract)) ? new SqlEntityCache(this, entityContext, RAMCacheRefreshInterval) : null;
                     });
                 }
                 catch
@@ -192,7 +192,7 @@ namespace Blueprint.Database.Sql
         }
 
         /// <summary>Finds a cached entity table when the current transaction permits cached reads.</summary>
-        /// <param name="contract">The registered entity interface.</param>
+        /// <param name="contract">The registered entity class.</param>
         /// <returns>The cached table, or null when SQL is required.</returns>
         internal override RAMCachedTable? GetCachedTable(Type contract)
         {

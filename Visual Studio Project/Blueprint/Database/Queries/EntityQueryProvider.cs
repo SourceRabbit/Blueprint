@@ -1,8 +1,6 @@
 using System.Linq.Expressions;
 using System.Reflection;
 using Blueprint.Database.Queries.QueryExecutors;
-using Blueprint.Database.Queries.QueryExecutors.RAMCache;
-using Blueprint.Database.Queries.QueryExecutors.Sql;
 
 namespace Blueprint.Database.Queries
 {
@@ -11,22 +9,17 @@ namespace Blueprint.Database.Queries
     {
         private readonly BlueprintDatabase fDatabase;
         private readonly long fLanguage;
-        private readonly AbstractQueryExecutor[] fExecutors;
+        private readonly QueryExecutor fExecutor;
 
-        /// <summary>Connects the provider to the database and orders RAM cache execution before SQL fallback.</summary>
+        /// <summary>Connects the query to the executor selected by the root entity's base class.</summary>
         /// <param name="database">The query's database.</param>
-        /// <param name="contract">The root entity interface.</param>
-        /// <param name="queryFactory">The function that creates the root with optional automatic relationships.</param>
+        /// <param name="contract">The root entity class.</param>
         /// <param name="language">The language of the filters and results.</param>
-        internal EntityQueryProvider(BlueprintDatabase database, Type contract, Func<BlueprintDatabaseContext, bool, IQueryable> queryFactory, long language)
+        internal EntityQueryProvider(BlueprintDatabase database, Type contract, long language)
         {
             fDatabase = database;
             fLanguage = language;
-            fExecutors = new AbstractQueryExecutor[]
-            {
-                new RAMCacheQueryExecutor(database, contract, this, language),
-                new SqlQueryExecutor(queryFactory, this, language)
-            };
+            fExecutor = QueryExecutor.Create(database, contract, this, language);
         }
 
         /// <summary>Builds a derived query without accessing the database.</summary>
@@ -47,7 +40,7 @@ namespace Blueprint.Database.Queries
             return (IQueryable)Activator.CreateInstance(typeof(EntityQuery<>).MakeGenericType(queryType.GetGenericArguments()[0]), BindingFlags.NonPublic | BindingFlags.Instance, null, new object[] { this, expression }, null)!;
         }
 
-        /// <summary>Delegates a terminal LINQ operation to the first executor that supports it under the database lock.</summary>
+        /// <summary>Delegates a terminal LINQ operation to the entity's executor under the database lock.</summary>
         /// <typeparam name="TResult">The result type.</typeparam>
         /// <param name="expression">The complete expression.</param>
         /// <returns>The result from the cache or database.</returns>
@@ -57,12 +50,9 @@ namespace Blueprint.Database.Queries
             return fDatabase.ExecuteOperation(context =>
             {
                 _ = context.EntityTypes.getLanguage(fLanguage);
-                foreach (AbstractQueryExecutor executor in fExecutors)
+                if (fExecutor.TryExecute(context, expression, out TResult result))
                 {
-                    if (executor.TryExecute(context, expression, out TResult result))
-                    {
-                        return result;
-                    }
+                    return result;
                 }
                 throw new InvalidOperationException("No query executor accepted the expression.");
             });
@@ -76,7 +66,7 @@ namespace Blueprint.Database.Queries
             return Execute<object?>(expression);
         }
 
-        /// <summary>Delegates list materialization to the first supported executor while holding the database lock.</summary>
+        /// <summary>Delegates list materialization to the entity's executor while holding the database lock.</summary>
         /// <typeparam name="TElement">The type of each result.</typeparam>
         /// <param name="expression">The complete query.</param>
         /// <returns>The results from the cache or database.</returns>
@@ -86,12 +76,9 @@ namespace Blueprint.Database.Queries
             return fDatabase.ExecuteOperation(context =>
             {
                 _ = context.EntityTypes.getLanguage(fLanguage);
-                foreach (AbstractQueryExecutor executor in fExecutors)
+                if (fExecutor.TryExecuteList<TElement>(context, expression, out List<TElement>? items))
                 {
-                    if (executor.TryExecuteList<TElement>(context, expression, out List<TElement>? items))
-                    {
-                        return items!;
-                    }
+                    return items!;
                 }
                 throw new InvalidOperationException("No query executor accepted the expression.");
             });

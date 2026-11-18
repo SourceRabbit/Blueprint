@@ -70,7 +70,7 @@ namespace Blueprint.Tests.Localization
         /// <param name="databaseName">Το μοναδικό όνομα της προσωρινής βάσης.</param>
         /// <param name="table">Ο πίνακας του ελεγχόμενου contract.</param>
         /// <exception cref="Exception">Αποτυγχάνει έλεγχος ή λειτουργία SQL.</exception>
-        private void CheckContract<TEntity>(BlueprintDatabase database, SqlConnection connection, string databaseName, string table) where TEntity : class, FallbackFields
+        private void CheckContract<TEntity>(BlueprintDatabase database, SqlConnection connection, string databaseName, string table) where TEntity : BlueprintEntity, FallbackFields
         {
             (string? Default, string? Translation, string? Expected)[] cases =
             {
@@ -282,8 +282,8 @@ namespace Blueprint.Tests.Localization
         }
     }
 
-    /// <summary>Ορίζει κληρονομούμενα πεδία για τους ίδιους ελέγχους με και χωρίς cache.</summary>
-    public interface FallbackFields : BlueprintEntity
+    /// <summary>Ορίζει κοινό API πεδίων για τους ίδιους ελέγχους με και χωρίς cache.</summary>
+    public interface FallbackFields
     {
         int Code { get; set; }
 
@@ -298,47 +298,65 @@ namespace Blueprint.Tests.Localization
 
     /// <summary>Διαβάζει τα πεδία απευθείας από SQL.</summary>
     [Entity("FallbackSqlRecords")]
-    public interface SqlFallbackRecord : FallbackFields
+    public abstract class SqlFallbackRecord : BlueprintEntityDB, FallbackFields
     {
+        public abstract int Code { get; set; }
+
+        public abstract int Marker { get; set; }
+
+        [Multilingual, FallbackToDefaultLanguage]
+        public abstract string? Title { get; set; }
+
+        [Multilingual]
+        public abstract string? PlainTitle { get; set; }
     }
 
     /// <summary>Διαβάζει τα ίδια πεδία από RAM cache.</summary>
-    [Entity("FallbackCachedRecords"), RAMCached]
-    public interface CachedFallbackRecord : FallbackFields
+    [Entity("FallbackCachedRecords")]
+    public abstract class CachedFallbackRecord : BlueprintEntityRAM, FallbackFields
     {
+        public abstract int Code { get; set; }
+
+        public abstract int Marker { get; set; }
+
+        [Multilingual, FallbackToDefaultLanguage]
+        public abstract string? Title { get; set; }
+
+        [Multilingual]
+        public abstract string? PlainTitle { get; set; }
     }
 
     /// <summary>Ορίζει σχέση για έλεγχο μεταφράσεων κατά το SQL materialization.</summary>
     [Entity("FallbackReferences")]
-    public interface FallbackReference : BlueprintEntity
+    public abstract class FallbackReference : BlueprintEntityDB
     {
-        long ProductID { get; set; }
+        public abstract long ProductID { get; set; }
 
         [ForeignKey(nameof(ProductID)), AutoInclude]
-        SqlFallbackRecord Product { get; set; }
+        public abstract SqlFallbackRecord Product { get; set; }
     }
 
     /// <summary>Δοκιμάζει την απόρριψη fallback χωρίς Multilingual.</summary>
     [Entity("UntranslatedFallback")]
-    public interface UntranslatedFallback : BlueprintEntity
+    public abstract class UntranslatedFallback : BlueprintEntityDB
     {
         [FallbackToDefaultLanguage]
-        string? Title { get; set; }
+        public abstract string? Title { get; set; }
     }
 
     /// <summary>Δοκιμάζει την απόρριψη fallback σε μη κειμενικό πεδίο.</summary>
     [Entity("NonStringFallback")]
-    public interface NonStringFallback : BlueprintEntity
+    public abstract class NonStringFallback : BlueprintEntityDB
     {
         [Multilingual, FallbackToDefaultLanguage]
-        int Title { get; set; }
+        public abstract int Title { get; set; }
     }
 
     /// <summary>Δοκιμάζει την απόρριψη fallback σε μη αποθηκευμένο πεδίο.</summary>
     [Entity("UnmappedFallback")]
-    public interface UnmappedFallback : BlueprintEntity
+    public abstract class UnmappedFallback : BlueprintEntityDB
     {
         [NotMapped, Multilingual, FallbackToDefaultLanguage]
-        string? Title { get; set; }
+        public abstract string? Title { get; set; }
     }
 }

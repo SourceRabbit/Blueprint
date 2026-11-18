@@ -5,11 +5,36 @@ namespace Blueprint.Tests
     /// <summary>Creates and runs Blueprint tests through the shared RunTest method.</summary>
     internal static class Program
     {
-        /// <summary>Runs isolated SQL command, log, or RAM cache checks, or the configured performance test.</summary>
-        /// <param name="args">Use --sql-execute-non-query for standalone SQL commands, --sql-log for logging, --ram-cache-auto-include for cached relationships, or --ram-cache-change-tracking for SQL/RAM synchronization; otherwise run the configured performance test.</param>
+        /// <summary>Runs isolated entity class, SQL command, log, or RAM cache checks, or the configured performance test.</summary>
+        /// <param name="args">Use --entity-classes for model/query/lifecycle checks, --entity-classes-sql for class persistence, --multilingual-fallback for translations, --sql-execute-non-query for standalone SQL commands, --sql-log for logging, --ram-cache-auto-include for cached relationships, or --ram-cache-change-tracking for synchronization; otherwise run the configured performance test.</param>
         /// <returns>Zero on success or one on failure.</returns>
         private static int Main(string[] args)
         {
+            if (args.Contains("--entity-classes-sql"))
+            {
+                Entities.EntityClassPersistenceTest persistenceTest = new Entities.EntityClassPersistenceTest();
+                persistenceTest.RunTest();
+                return 0;
+            }
+
+            if (args.Contains("--entity-classes"))
+            {
+                Entities.EntityClassTest entityTest = new Entities.EntityClassTest();
+                entityTest.RunTest();
+                Queries.QueryExecutorTest queryTest = new Queries.QueryExecutorTest();
+                queryTest.RunTest();
+                Lifecycle.LifecycleTest lifecycleTest = new Lifecycle.LifecycleTest(false);
+                lifecycleTest.RunTest();
+                return 0;
+            }
+
+            if (args.Contains("--multilingual-fallback"))
+            {
+                Localization.MultilingualFallbackTest fallbackTest = new Localization.MultilingualFallbackTest();
+                fallbackTest.RunTest();
+                return 0;
+            }
+
             if (args.Contains("--sql-execute-non-query"))
             {
                 Sql.ExecuteNonQueryTest commandTest = new Sql.ExecuteNonQueryTest();

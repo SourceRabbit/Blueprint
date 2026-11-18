@@ -1,50 +1,129 @@
-using Blueprint.Database.Entities.Annotations;
 using Blueprint.Database.Entities;
-using Microsoft.EntityFrameworkCore;
+using Blueprint.Database.Entities.Annotations;
+using Blueprint.Database.Queries.QueryExecutors;
 using Microsoft.EntityFrameworkCore.Metadata;
+using System.Reflection;
 
 namespace Blueprint.Database.Queries
 {
-    /// <summary>Builds Include paths for declared relationships while breaking cycles.</summary>
-    internal static class EntityIncludes
+    /// <summary>Loads AutoInclude graphs through each target entity's executor, preserving independent objects and cyclic references.</summary>
+    internal sealed class EntityIncludes
     {
-        /// <summary>Enables loading of annotated relationships for complete entities.</summary>
-        /// <typeparam name="TEntity">The generated entity class.</typeparam>
-        /// <param name="context">The query context.</param>
-        /// <param name="query">The original query.</param>
-        /// <returns>The query with its Includes.</returns>
-        internal static IQueryable<TEntity> Apply<TEntity>(BlueprintDatabaseContext context, IQueryable<TEntity> query) where TEntity : class
+        private readonly BlueprintDatabase fDatabase;
+        private readonly BlueprintDatabaseContext fContext;
+        private readonly long fLanguage;
+        private readonly Dictionary<(Type, long), BlueprintEntity> fEntities = new Dictionary<(Type, long), BlueprintEntity>();
+
+        /// <summary>Creates one identity scope for a materialized result graph.</summary>
+        /// <param name="database">The database owning the result.</param>
+        /// <param name="context">The context held under the database lock.</param>
+        /// <param name="language">The language shared by the graph.</param>
+        private EntityIncludes(BlueprintDatabase database, BlueprintDatabaseContext context, long language)
         {
-            foreach (var path in GetPaths(context, context.Model.FindEntityType(typeof(TEntity))!, string.Empty, new HashSet<Type>()))
-            {
-                query = query.Include(path);
-            }
-            return query;
+            fDatabase = database;
+            fContext = context;
+            fLanguage = language;
         }
 
-        /// <summary>Follows AutoInclude relationships without repeating a type within the same path.</summary>
-        /// <param name="context">The model context.</param>
-        /// <param name="entityType">The current EF type.</param>
-        /// <param name="prefix">The path from the root.</param>
-        /// <param name="ancestors">The types already visited.</param>
-        /// <returns>The loading paths.</returns>
-        /// <exception cref="InvalidOperationException">AutoInclude refers to an unmapped relationship.</exception>
-        private static IEnumerable<string> GetPaths(BlueprintDatabaseContext context, IEntityType entityType, string prefix, HashSet<Type> ancestors)
+        /// <summary>Loads declared relationships after root materialization, selecting DB or RAM for every related contract.</summary>
+        /// <param name="database">The database owning the results.</param>
+        /// <param name="context">The active context under the database lock.</param>
+        /// <param name="entities">Independent root entities.</param>
+        /// <param name="language">The language applied to related entities.</param>
+        /// <exception cref="Exception">Relationship mapping, synchronization, or SQL execution fails.</exception>
+        internal static void Load(BlueprintDatabase database, BlueprintDatabaseContext context, IEnumerable<BlueprintEntity> entities, long language)
         {
-            if (!ancestors.Add(entityType.ClrType))
+            EntityIncludes loader = new EntityIncludes(database, context, language);
+            List<BlueprintEntity> roots = entities.ToList();
+            foreach (BlueprintEntity entity in roots)
             {
-                yield break;
+                loader.fEntities.TryAdd((entity.GetType(), entity.ID), entity);
             }
-            var contract = context.EntityTypes.Types.Single(pair => pair.Value == entityType.ClrType).Key;
-            foreach (var property in BlueprintEntityTypes.GetProperties(contract).Where(property => property.IsDefined(typeof(AutoInclude), true)))
+            loader.LoadEntities(roots, new HashSet<Type>());
+        }
+
+        /// <summary>Batches relationship keys by target and stops expansion when a type repeats in an include path.</summary>
+        /// <param name="entities">The independent entities at this level.</param>
+        /// <param name="ancestors">Types already expanded along the current path.</param>
+        /// <exception cref="Exception">A relationship cannot be loaded.</exception>
+        private void LoadEntities(IReadOnlyList<BlueprintEntity> entities, HashSet<Type> ancestors)
+        {
+            foreach (IGrouping<Type, BlueprintEntity> group in entities.GroupBy(entity => entity.GetType()))
             {
-                var navigation = entityType.FindNavigation(property.Name) ?? throw new InvalidOperationException($"AutoInclude property '{contract}.{property.Name}' must be a mapped navigation.");
-                var path = prefix + property.Name;
-                yield return path;
-                foreach (var child in GetPaths(context, navigation.TargetEntityType, path + ".", new HashSet<Type>(ancestors)))
+                if (ancestors.Contains(group.Key))
                 {
-                    yield return child;
+                    continue;
                 }
+                HashSet<Type> path = new HashSet<Type>(ancestors) { group.Key };
+                Type contract = fContext.EntityTypes.Types.Single(pair => pair.Value == group.Key).Key;
+                IEntityType model = fContext.Model.FindEntityType(group.Key)!;
+                foreach (PropertyInfo property in BlueprintEntityTypes.GetProperties(contract).Where(property => property.IsDefined(typeof(AutoInclude), true)))
+                {
+                    INavigation navigation = model.FindNavigation(property.Name) ?? throw new InvalidOperationException($"AutoInclude property '{contract}.{property.Name}' must be a mapped navigation.");
+                    IProperty foreignKey = navigation.ForeignKey.Properties.Single();
+                    IProperty primaryKey = navigation.ForeignKey.PrincipalKey.Properties.Single();
+                    IProperty parentKey = navigation.IsOnDependent ? foreignKey : primaryKey;
+                    IProperty targetKey = navigation.IsOnDependent ? primaryKey : foreignKey;
+                    long[] ids = group.Select(entity => parentKey.PropertyInfo!.GetValue(entity)).OfType<long>().Distinct().ToArray();
+                    Type targetContract = fContext.EntityTypes.Types.Single(pair => pair.Value == navigation.TargetEntityType.ClrType).Key;
+                    QueryExecutor executor = QueryExecutor.Create(fDatabase, targetContract, fContext.Query(targetContract).Provider, fLanguage);
+                    List<BlueprintEntity> related = new List<BlueprintEntity>();
+                    if (ids.Length > 0)
+                    {
+                        foreach (BlueprintEntity row in executor.ReadRelated(fContext, targetKey, ids))
+                        {
+                            (Type, long) identity = (row.GetType(), row.ID);
+                            if (!fEntities.TryGetValue(identity, out BlueprintEntity? instance))
+                            {
+                                instance = row;
+                                fEntities.Add(identity, row);
+                            }
+                            related.Add(instance);
+                        }
+                    }
+                    LoadEntities(related, path);
+                    ILookup<object?, BlueprintEntity> matches = related.ToLookup(entity => targetKey.PropertyInfo!.GetValue(entity));
+                    foreach (BlueprintEntity entity in group)
+                    {
+                        IEnumerable<BlueprintEntity> values = matches[parentKey.PropertyInfo!.GetValue(entity)];
+                        if (navigation.IsCollection)
+                        {
+                            IClrCollectionAccessor accessor = navigation.GetCollectionAccessor()!;
+                            property.SetValue(entity, accessor.Create());
+                            foreach (BlueprintEntity value in values)
+                            {
+                                accessor.Add(entity, value, true);
+                                FixInverse(navigation, entity, value);
+                            }
+                        }
+                        else
+                        {
+                            BlueprintEntity? value = values.SingleOrDefault();
+                            property.SetValue(entity, value);
+                            if (value != null)
+                            {
+                                FixInverse(navigation, entity, value);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>Connects inverse references and collections only on independent materialized objects.</summary>
+        /// <param name="navigation">The loaded navigation.</param>
+        /// <param name="entity">The source entity.</param>
+        /// <param name="related">The selected related entity.</param>
+        private static void FixInverse(INavigation navigation, BlueprintEntity entity, BlueprintEntity related)
+        {
+            INavigation? inverse = navigation.Inverse;
+            if (inverse?.IsCollection == true)
+            {
+                inverse.GetCollectionAccessor()!.Add(related, entity, true);
+            }
+            else if (inverse != null)
+            {
+                inverse.PropertyInfo!.SetValue(related, entity);
             }
         }
     }

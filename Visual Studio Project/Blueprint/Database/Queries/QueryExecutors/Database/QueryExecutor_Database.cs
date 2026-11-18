@@ -1,20 +1,19 @@
 using Blueprint.Database.Entities;
 using System.Linq.Expressions;
+using Microsoft.EntityFrameworkCore.Metadata;
 
-namespace Blueprint.Database.Queries.QueryExecutors.Sql
+namespace Blueprint.Database.Queries.QueryExecutors.Database
 {
     /// <summary>Translates and executes queries through EF Core while preserving the language and visitor order.</summary>
-    internal sealed class SqlQueryExecutor : AbstractQueryExecutor
+    internal sealed class QueryExecutor_Database : QueryExecutor
     {
-        private readonly Func<BlueprintDatabaseContext, bool, IQueryable> fQueryFactory;
-
-        /// <summary>Stores the factory that creates an EF root from each execution's active context.</summary>
-        /// <param name="queryFactory">The factory that creates the root with optional relationship loading.</param>
+        /// <summary>Binds SQL execution to the root contract and its database.</summary>
+        /// <param name="database">The database owning the query.</param>
+        /// <param name="contract">The entity class to read.</param>
         /// <param name="provider">The provider that owns the original expression.</param>
         /// <param name="language">The language ID used by filters and results.</param>
-        internal SqlQueryExecutor(Func<BlueprintDatabaseContext, bool, IQueryable> queryFactory, IQueryProvider provider, long language) : base(provider, language)
+        internal QueryExecutor_Database(BlueprintDatabase database, Type contract, IQueryProvider provider, long language) : base(database, contract, provider, language)
         {
-            fQueryFactory = queryFactory;
         }
 
         /// <summary>Executes the terminal expression through EF Core and restores the language even on failure.</summary>
@@ -26,13 +25,16 @@ namespace Blueprint.Database.Queries.QueryExecutors.Sql
         /// <exception cref="Exception">Root creation, query translation, or execution fails.</exception>
         internal override bool TryExecute<TResult>(BlueprintDatabaseContext context, Expression expression, out TResult result)
         {
-            bool includeRelated = typeof(BlueprintEntity).IsAssignableFrom(typeof(TResult));
-            IQueryable root = fQueryFactory(context, includeRelated);
+            IQueryable root = context.Query(fContract);
             long previousLanguage = context.QueryLanguage;
             try
             {
                 context.QueryLanguage = fLanguage;
                 result = root.Provider.Execute<TResult>(Translate(expression, root, context.EntityTypes.DefaultLanguageID));
+                if (result is BlueprintEntity entity)
+                {
+                    EntityIncludes.Load(fDatabase, context, new[] { entity }, fLanguage);
+                }
                 return true;
             }
             finally
@@ -50,14 +52,41 @@ namespace Blueprint.Database.Queries.QueryExecutors.Sql
         /// <exception cref="Exception">Root creation, query translation, or materialization fails.</exception>
         internal override bool TryExecuteList<TElement>(BlueprintDatabaseContext context, Expression expression, out List<TElement>? items)
         {
-            bool includeRelated = typeof(BlueprintEntity).IsAssignableFrom(typeof(TElement));
-            IQueryable root = fQueryFactory(context, includeRelated);
+            IQueryable root = context.Query(fContract);
             long previousLanguage = context.QueryLanguage;
             try
             {
                 context.QueryLanguage = fLanguage;
                 items = root.Provider.CreateQuery<TElement>(Translate(expression, root, context.EntityTypes.DefaultLanguageID)).ToList();
+                EntityIncludes.Load(fDatabase, context, items.OfType<BlueprintEntity>(), fLanguage);
                 return true;
+            }
+            finally
+            {
+                context.QueryLanguage = previousLanguage;
+            }
+        }
+
+        /// <summary>Fetches related scalar rows in parameterized batches without SQL Include joins.</summary>
+        /// <param name="context">The active model context.</param>
+        /// <param name="key">The mapped relationship key.</param>
+        /// <param name="ids">The parent key values to match.</param>
+        /// <returns>Independent rows with the requested language selected.</returns>
+        /// <exception cref="Exception">Query construction or SQL execution fails.</exception>
+        internal override List<BlueprintEntity> ReadRelated(BlueprintDatabaseContext context, IProperty key, long[] ids)
+        {
+            IQueryable root = context.Query(fContract);
+            ParameterExpression parameter = Expression.Parameter(root.ElementType, "entity");
+            Expression value = Expression.Property(parameter, key.PropertyInfo!);
+            Expression predicate = value.Type == typeof(long?)
+                ? Expression.AndAlso(Expression.Property(value, "HasValue"), Expression.Call(typeof(Enumerable), nameof(Enumerable.Contains), new[] { typeof(long) }, Expression.Constant(ids), Expression.Property(value, "Value")))
+                : Expression.Call(typeof(Enumerable), nameof(Enumerable.Contains), new[] { typeof(long) }, Expression.Constant(ids), value);
+            Expression filter = Expression.Call(typeof(Queryable), nameof(Queryable.Where), new[] { root.ElementType }, root.Expression, Expression.Quote(Expression.Lambda(predicate, parameter)));
+            long previousLanguage = context.QueryLanguage;
+            try
+            {
+                context.QueryLanguage = fLanguage;
+                return root.Provider.CreateQuery(filter).Cast<BlueprintEntity>().ToList();
             }
             finally
             {

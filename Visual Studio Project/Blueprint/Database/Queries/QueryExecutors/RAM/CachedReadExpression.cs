@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore.Metadata;
 using System.Linq.Expressions;
 using System.Reflection;
 
-namespace Blueprint.Database.Queries.QueryExecutors.RAMCache
+namespace Blueprint.Database.Queries.QueryExecutors.RAM
 {
     /// <summary>Checks filters, sorting keys, and projections for safe reads of the shared cache without mutable references.</summary>
     internal sealed class CachedReadExpression : ExpressionVisitor
@@ -22,7 +22,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAMCache
         private bool fAllowProjection;
 
         /// <summary>Maps public properties to stored values in a specific language.</summary>
-        /// <param name="contract">The public table interface.</param>
+        /// <param name="contract">The public entity class.</param>
         /// <param name="concreteType">The generated class of the cached objects.</param>
         /// <param name="properties">The model's stored properties.</param>
         /// <param name="language">The language of the filters.</param>

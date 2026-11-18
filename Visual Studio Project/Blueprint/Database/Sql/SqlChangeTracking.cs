@@ -6,7 +6,7 @@ using System.Data.Common;
 
 namespace Blueprint.Database.Sql
 {
-    /// <summary>Enables the SQL Server features required by selected RAMCached entities.</summary>
+    /// <summary>Enables the SQL Server features required by selected RAM-cached entities.</summary>
     internal static class SqlChangeTracking
     {
         /// <summary>Enables Change Tracking and snapshot isolation without changing existing retention settings.</summary>
@@ -66,7 +66,7 @@ namespace Blueprint.Database.Sql
             }
         }
 
-        /// <summary>Finds mappings for cached interfaces and their transitive AutoInclude relationships.</summary>
+        /// <summary>Finds mappings only for entity classes whose inheritance selects RAM caching.</summary>
         /// <param name="context">The context with registered types.</param>
         /// <returns>The EF mappings of the selected entities.</returns>
         private static IEnumerable<IEntityType> GetCachedTypes(DbContext context)

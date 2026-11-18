@@ -65,16 +65,16 @@ namespace Blueprint.Database
         public abstract int ExecuteNonQuery(string commandText, IReadOnlyList<DbParameter>? parameters = null, int? commandTimeoutSeconds = null);
 
         /// <summary>Registers a contract and immediately synchronizes the schema and optional cache.</summary>
-        /// <typeparam name="TEntity">The interface carrying EntityAttribute.</typeparam>
+        /// <typeparam name="TEntity">The class carrying EntityAttribute.</typeparam>
         /// <exception cref="ArgumentException">The contract is invalid.</exception>
         /// <exception cref="Exception">Provider synchronization fails without replacing the previously active model.</exception>
-        public void RegisterEntity<TEntity>() where TEntity : class, BlueprintEntity
+        public void RegisterEntity<TEntity>() where TEntity : BlueprintEntity
         {
             RegisterEntity(typeof(TEntity));
         }
 
-        /// <summary>Registers an interface and synchronizes the model, reverting the registration if the provider fails.</summary>
-        /// <param name="entityType">The entity interface.</param>
+        /// <summary>Registers an entity class and synchronizes the model, reverting the registration if the provider fails.</summary>
+        /// <param name="entityType">The entity class.</param>
         /// <remarks>Registering the same type again resynchronizes the schema and cache without duplicates.</remarks>
         /// <exception cref="ArgumentNullException">No entity type was provided.</exception>
         /// <exception cref="ArgumentException">The type is not a valid contract.</exception>
@@ -111,10 +111,10 @@ namespace Blueprint.Database
         protected abstract void SynchronizeEntities();
 
         /// <summary>Creates an unsaved instance of the generated entity class.</summary>
-        /// <typeparam name="TEntity">The registered interface.</typeparam>
+        /// <typeparam name="TEntity">The registered entity class.</typeparam>
         /// <returns>The new entity with ID zero and CurrentLanguage set to the ID of the language with an empty Prefix.</returns>
         /// <exception cref="InvalidOperationException">This type has not been initialized.</exception>
-        public TEntity Create<TEntity>() where TEntity : class, BlueprintEntity
+        public TEntity Create<TEntity>() where TEntity : BlueprintEntity
         {
             return ExecuteOperation(context =>
             {
@@ -137,32 +137,32 @@ namespace Blueprint.Database
         }
 
         /// <summary>Creates a deferred query for a registered entity in the selected language.</summary>
-        /// <typeparam name="TEntity">The registered entity interface.</typeparam>
+        /// <typeparam name="TEntity">The registered entity class.</typeparam>
         /// <param name="language">The language ID, or null for the default language.</param>
         /// <returns>A composable query bound to this database.</returns>
         /// <exception cref="ArgumentOutOfRangeException">The language is not configured.</exception>
         /// <exception cref="InvalidOperationException">The entity is not registered.</exception>
         /// <exception cref="ObjectDisposedException">The database has been disposed.</exception>
-        internal IQueryable<TEntity> Query<TEntity>(long? language = null) where TEntity : class, BlueprintEntity
+        internal IQueryable<TEntity> Query<TEntity>(long? language = null) where TEntity : BlueprintEntity
         {
             return ExecuteOperation(context =>
             {
                 long languageID = language ?? context.EntityTypes.DefaultLanguageID;
                 _ = context.EntityTypes.getLanguage(languageID);
                 _ = ResolveType<TEntity>(context);
-                EntityQueryProvider provider = new EntityQueryProvider(this, typeof(TEntity), (currentContext, includeRelated) => currentContext.Query<TEntity>(includeRelated), languageID);
+                EntityQueryProvider provider = new EntityQueryProvider(this, typeof(TEntity), languageID);
                 return new EntityQuery<TEntity>(provider);
             });
         }
 
         /// <summary>Creates write operations after validating the entity and selected language.</summary>
-        /// <typeparam name="TEntity">The registered entity interface.</typeparam>
+        /// <typeparam name="TEntity">The registered entity class.</typeparam>
         /// <param name="language">The language ID, or null for the default language.</param>
         /// <returns>The entity's SQL write operations.</returns>
         /// <exception cref="ArgumentOutOfRangeException">The language is not configured.</exception>
         /// <exception cref="InvalidOperationException">The entity is not registered.</exception>
         /// <exception cref="ObjectDisposedException">The database has been disposed.</exception>
-        internal BlueprintEntityCommands<TEntity> Commands<TEntity>(long? language = null) where TEntity : class, BlueprintEntity
+        internal BlueprintEntityCommands<TEntity> Commands<TEntity>(long? language = null) where TEntity : BlueprintEntity
         {
             return ExecuteOperation(context =>
             {
@@ -186,7 +186,7 @@ namespace Blueprint.Database
         }
 
         /// <summary>Finds an optional cached table under the database lock.</summary>
-        /// <param name="contract">The registered entity interface.</param>
+        /// <param name="contract">The registered entity class.</param>
         /// <returns>The cached table, or null when SQL is required.</returns>
         internal virtual RAMCachedTable? GetCachedTable(Type contract)
         {
@@ -209,12 +209,12 @@ namespace Blueprint.Database
         {
         }
 
-        /// <summary>Verifies that the interface is included in the active model.</summary>
-        /// <typeparam name="TEntity">The requested interface.</typeparam>
+        /// <summary>Verifies that the entity class is included in the active model.</summary>
+        /// <typeparam name="TEntity">The requested entity class.</typeparam>
         /// <param name="context">The active context.</param>
         /// <returns>The generated class.</returns>
         /// <exception cref="InvalidOperationException">The entity must be registered and initialized.</exception>
-        internal static Type ResolveType<TEntity>(BlueprintDatabaseContext context) where TEntity : class, BlueprintEntity
+        internal static Type ResolveType<TEntity>(BlueprintDatabaseContext context) where TEntity : BlueprintEntity
         {
             return context.EntityTypes.Types.TryGetValue(typeof(TEntity), out Type? type) ? type : throw new InvalidOperationException($"Entity '{typeof(TEntity)}' is not registered. Call RegisterEntity() first.");
         }
@@ -331,7 +331,7 @@ namespace Blueprint.Database
             }
         }
 
-        /// <summary>The interval for checking external changes to loaded RAMCached entities. Defaults to one second.</summary>
+        /// <summary>The interval for checking external changes to loaded RAM-cached entities. Defaults to one second.</summary>
         /// <exception cref="ArgumentOutOfRangeException">The interval is less than 1 ms or exceeds the timer limit.</exception>
         /// <exception cref="ObjectDisposedException">The database has been disposed.</exception>
         public TimeSpan RAMCacheRefreshInterval

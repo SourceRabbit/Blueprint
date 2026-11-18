@@ -34,7 +34,7 @@ Blueprint does not automatically drop removed tables or columns. It does not inf
 
 For a C# rename that should preserve the existing SQL column, use `[Column("ExistingColumnName")]`. For an actual database rename or data transformation, prepare an explicit migration before registering the new model.
 
-A removed column can still affect writes: an old required column without a usable default may reject inserts even though it is no longer in the interface. Include retained columns and constraints in your migration review.
+A removed column can still affect writes: an old required column without a usable default may reject inserts even though it is no longer in the class. Include retained columns and constraints in your migration review.
 
 ## Atomicity and failures
 

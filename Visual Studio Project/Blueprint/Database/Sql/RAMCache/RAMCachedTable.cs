@@ -1,5 +1,4 @@
 using Blueprint.Database.Entities;
-using Blueprint.Database.Entities.Annotations;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -16,8 +15,6 @@ namespace Blueprint.Database.Sql.RAMCache
         private readonly BlueprintDatabaseContext fContext;
         private readonly Type fConcreteType;
         private readonly IProperty[] fProperties;
-        private readonly (INavigation Navigation, Type Contract)[] fAutoIncludes;
-        private readonly IReadOnlyDictionary<Type, RAMCachedTable> fTables;
         private readonly Dictionary<IProperty, ILookup<object?, BlueprintEntity>> fForeignKeyIndexes = new Dictionary<IProperty, ILookup<object?, BlueprintEntity>>();
         private readonly string fTableName;
         private readonly string fKeyColumn;
@@ -27,19 +24,15 @@ namespace Blueprint.Database.Sql.RAMCache
         private long fBeginVersion;
         private int fObjectID;
 
-        /// <summary>Prepares scalar snapshots and automatic relationships backed by the same cache.</summary>
+        /// <summary>Prepares scalar snapshots for an entity whose base class selects RAM storage.</summary>
         /// <param name="context">The active model context.</param>
-        /// <param name="contract">The explicitly or implicitly cached interface.</param>
-        /// <param name="tables">The shared table registry, completed before any row is copied.</param>
-        /// <exception cref="InvalidOperationException">An AutoInclude property is not a mapped navigation.</exception>
-        internal RAMCachedTable(BlueprintDatabaseContext context, Type contract, IReadOnlyDictionary<Type, RAMCachedTable> tables)
+        /// <param name="contract">The RAM entity class.</param>
+        internal RAMCachedTable(BlueprintDatabaseContext context, Type contract)
         {
             fContext = context;
             fConcreteType = context.EntityTypes.Types[contract];
             IEntityType entityType = context.Model.FindEntityType(fConcreteType)!;
             fProperties = entityType.GetProperties().ToArray();
-            fTables = tables;
-            fAutoIncludes = BlueprintEntityTypes.GetProperties(contract).Where(property => property.IsDefined(typeof(AutoInclude), true)).Select(property => (entityType.FindNavigation(property.Name) ?? throw new InvalidOperationException($"AutoInclude property '{contract}.{property.Name}' must be a mapped navigation."), BlueprintEntityTypes.GetRelatedContract(property.PropertyType)!)).ToArray();
             ISqlGenerationHelper sqlHelper = context.GetService<ISqlGenerationHelper>();
             fTableName = sqlHelper.DelimitIdentifier(entityType.GetTableName()!, entityType.GetSchema());
             StoreObjectIdentifier store = StoreObjectIdentifier.Table(entityType.GetTableName()!, entityType.GetSchema());
@@ -121,27 +114,12 @@ namespace Blueprint.Database.Sql.RAMCache
             fObjectID = objectID;
         }
 
-        /// <summary>Copies a row and its AutoInclude graph without exposing shared cached values.</summary>
+        /// <summary>Copies only mapped scalar values without exposing the shared cached instance.</summary>
         /// <param name="stored">The shared cached row.</param>
-        /// <param name="language">The language applied to every copied entity.</param>
-        /// <returns>An independent entity graph assembled entirely from cached snapshots.</returns>
+        /// <param name="language">The language of the independent copy.</param>
+        /// <returns>An independent entity; relationship executors load its AutoIncludes separately.</returns>
         internal BlueprintEntity Copy(BlueprintEntity stored, long language)
         {
-            return Copy(stored, language, new HashSet<Type>(), new Dictionary<(Type, long), BlueprintEntity>());
-        }
-
-        /// <summary>Builds one include path, reusing ancestors and stopping expansion when a type repeats.</summary>
-        /// <param name="stored">The row in this table's committed snapshot.</param>
-        /// <param name="language">The language shared by the copied graph.</param>
-        /// <param name="ancestors">The types already expanded along the current path.</param>
-        /// <param name="copies">The independent ancestor instances available for cyclic references.</param>
-        /// <returns>The copied row with the automatic relationships permitted on this path.</returns>
-        private BlueprintEntity Copy(BlueprintEntity stored, long language, HashSet<Type> ancestors, Dictionary<(Type, long), BlueprintEntity> copies)
-        {
-            if (copies.TryGetValue((fConcreteType, stored.ID), out BlueprintEntity? existing))
-            {
-                return existing;
-            }
             BlueprintEntity entity = (BlueprintEntity)Activator.CreateInstance(fConcreteType)!;
             foreach (IProperty property in fProperties)
             {
@@ -150,69 +128,31 @@ namespace Blueprint.Database.Sql.RAMCache
                 property.PropertyInfo.SetValue(entity, copy);
             }
             entity.CurrentLanguage = language;
-            if (!ancestors.Add(fConcreteType))
-            {
-                return entity;
-            }
-            copies.Add((fConcreteType, stored.ID), entity);
-            foreach ((INavigation navigation, Type contract) in fAutoIncludes)
-            {
-                RAMCachedTable relatedTable = fTables[contract];
-                IProperty foreignKey = navigation.ForeignKey.Properties.Single();
-                IEnumerable<BlueprintEntity> relatedRows;
-                if (navigation.IsOnDependent)
-                {
-                    relatedRows = foreignKey.PropertyInfo!.GetValue(stored) is long id && relatedTable.Rows.TryGetValue(id, out BlueprintEntity? related) ? new[] { related } : Array.Empty<BlueprintEntity>();
-                }
-                else
-                {
-                    relatedRows = relatedTable.GetReferencingRows(foreignKey, stored.ID);
-                }
-                if (navigation.IsCollection)
-                {
-                    IClrCollectionAccessor accessor = navigation.GetCollectionAccessor()!;
-                    accessor.GetOrCreate(entity, true);
-                    foreach (BlueprintEntity related in relatedRows)
-                    {
-                        BlueprintEntity relatedCopy = relatedTable.Copy(related, language, ancestors, copies);
-                        accessor.Add(entity, relatedCopy, true);
-                        FixInverse(navigation, entity, relatedCopy);
-                    }
-                }
-                else
-                {
-                    BlueprintEntity? related = relatedRows.SingleOrDefault();
-                    BlueprintEntity? relatedCopy = related == null ? null : relatedTable.Copy(related, language, ancestors, copies);
-                    navigation.PropertyInfo!.SetValue(entity, relatedCopy);
-                    if (relatedCopy != null)
-                    {
-                        FixInverse(navigation, entity, relatedCopy);
-                    }
-                }
-            }
-            copies.Remove((fConcreteType, stored.ID));
-            ancestors.Remove(fConcreteType);
             return entity;
         }
 
-        /// <summary>Preserves EF relationship fix-up on private copies without loading additional tables or rows.</summary>
-        /// <param name="navigation">The relationship just populated from cached data.</param>
-        /// <param name="entity">The source entity copy.</param>
-        /// <param name="related">The related entity copy.</param>
-        private static void FixInverse(INavigation navigation, BlueprintEntity entity, BlueprintEntity related)
+        /// <summary>Looks up related cached rows without scanning the full table for every parent.</summary>
+        /// <param name="key">The primary or foreign key to match.</param>
+        /// <param name="ids">The distinct parent key values.</param>
+        /// <returns>Shared scalar rows that the executor must copy before returning.</returns>
+        internal IEnumerable<BlueprintEntity> GetRelatedRows(IProperty key, long[] ids)
         {
-            INavigation? inverse = navigation.Inverse;
-            if (inverse == null)
+            foreach (long id in ids)
             {
-                return;
-            }
-            if (inverse.IsCollection)
-            {
-                inverse.GetCollectionAccessor()!.Add(related, entity, true);
-            }
-            else
-            {
-                inverse.PropertyInfo!.SetValue(related, entity);
+                if (key.Name == nameof(BlueprintEntity.ID))
+                {
+                    if (fRows.TryGetValue(id, out BlueprintEntity? entity))
+                    {
+                        yield return entity;
+                    }
+                }
+                else
+                {
+                    foreach (BlueprintEntity entity in GetReferencingRows(key, id))
+                    {
+                        yield return entity;
+                    }
+                }
             }
         }
 
@@ -236,7 +176,7 @@ namespace Blueprint.Database.Sql.RAMCache
         /// <param name="sql">The SQL with safely delimited identifiers.</param>
         /// <param name="parameters">The Change Tracking parameters.</param>
         /// <returns>The stored rows without tracking or relationships.</returns>
-        private static List<BlueprintEntity> ReadRows<TEntity>(BlueprintDatabaseContext context, string sql, object[] parameters) where TEntity : class, BlueprintEntity
+        private static List<BlueprintEntity> ReadRows<TEntity>(BlueprintDatabaseContext context, string sql, object[] parameters) where TEntity : BlueprintEntity
         {
             return context.Set<TEntity>().FromSqlRaw(sql, parameters).AsNoTracking().ToList().Cast<BlueprintEntity>().ToList();
         }
