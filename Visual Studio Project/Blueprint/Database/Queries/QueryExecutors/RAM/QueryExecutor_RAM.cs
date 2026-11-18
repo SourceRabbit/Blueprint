@@ -143,12 +143,61 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
             {
                 return false;
             }
-            if (!CachedCount.TryCreatePredicate(call, fProvider, fContract, table.ConcreteType, table.Properties, fLanguage, context.EntityTypes.DefaultLanguageID, out Func<BlueprintEntity, bool>? predicate))
+            if (!TryCreateCountPredicate(call, table, context.EntityTypes.DefaultLanguageID, out Func<BlueprintEntity, bool>? predicate))
             {
                 return false;
             }
             int matches = predicate == null ? table.Rows.Count : table.Rows.Values.Count(predicate);
             count = call.Method.Name == nameof(Queryable.LongCount) ? (object)(long)matches : matches;
+            return true;
+        }
+
+        /// <summary>Combines consecutive Where filters and the optional Count predicate for safe reads of shared cached objects.</summary>
+        /// <param name="expression">The terminal Count or LongCount expression.</param>
+        /// <param name="table">The synchronized table snapshot and its stored properties.</param>
+        /// <param name="defaultLanguage">The language used by fallback-enabled properties.</param>
+        /// <param name="predicate">The safe filter, or null if there are no filters.</param>
+        /// <returns>True if counting can run directly on the shared objects while preserving filter order and short-circuit behavior.</returns>
+        /// <exception cref="Exception">Expression rewriting or compilation fails.</exception>
+        private bool TryCreateCountPredicate(MethodCallExpression expression, RAMCachedTable table, long defaultLanguage, out Func<BlueprintEntity, bool>? predicate)
+        {
+            predicate = null;
+            if (expression.Method.GetGenericArguments().Length != 1 || expression.Method.GetGenericArguments()[0] != fContract)
+            {
+                return false;
+            }
+            Stack<Expression> filters = new Stack<Expression>();
+            if (expression.Arguments.Count == 2)
+            {
+                filters.Push(expression.Arguments[1]);
+            }
+            Expression source = expression.Arguments[0];
+            while (source is MethodCallExpression call && call.Method.DeclaringType == typeof(Queryable) && call.Method.Name == nameof(Queryable.Where))
+            {
+                filters.Push(call.Arguments[1]);
+                source = call.Arguments[0];
+            }
+            if (source is not ConstantExpression constant || constant.Value is not IQueryable query || !ReferenceEquals(query.Provider, fProvider) || query.ElementType != fContract)
+            {
+                return false;
+            }
+            if (filters.Count == 0)
+            {
+                return true;
+            }
+            CachedReadExpression visitor = new CachedReadExpression(fContract, table.ConcreteType, table.Properties, fLanguage, defaultLanguage);
+            Expression? body = null;
+            ParameterExpression? parameter = null;
+            foreach (Expression filter in filters)
+            {
+                if (!visitor.TryRewriteLambda(filter, out LambdaExpression? lambda))
+                {
+                    return false;
+                }
+                parameter = lambda!.Parameters[0];
+                body = body == null ? lambda.Body : Expression.AndAlso(body, lambda.Body);
+            }
+            predicate = Expression.Lambda<Func<BlueprintEntity, bool>>(body!, parameter!).Compile();
             return true;
         }
 
@@ -174,7 +223,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
             {
                 return false;
             }
-            if (!CachedPage.TryCreate(call.Arguments[0], fProvider, fContract, table.ConcreteType, table.Properties, fLanguage, context.EntityTypes.DefaultLanguageID, out Func<IEnumerable<BlueprintEntity>, IEnumerable<BlueprintEntity>>? selection))
+            if (!TryCreatePage(call.Arguments[0], table, context.EntityTypes.DefaultLanguageID, out Func<IEnumerable<BlueprintEntity>, IEnumerable<BlueprintEntity>>? selection))
             {
                 return false;
             }
@@ -215,7 +264,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
         private bool TryExecutePage<TElement>(RAMCachedTable table, BlueprintDatabaseContext context, Expression expression, out List<TElement>? items)
         {
             items = null;
-            if (!CachedPage.TryCreate(expression, fProvider, fContract, table.ConcreteType, table.Properties, fLanguage, context.EntityTypes.DefaultLanguageID, out Func<IEnumerable<BlueprintEntity>, IEnumerable<BlueprintEntity>>? page))
+            if (!TryCreatePage(expression, table, context.EntityTypes.DefaultLanguageID, out Func<IEnumerable<BlueprintEntity>, IEnumerable<BlueprintEntity>>? page))
             {
                 return false;
             }
@@ -229,6 +278,84 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
             return true;
         }
 
+        /// <summary>Translates supported operations to Enumerable, preserving the exact order of filters, sorting, and limits.</summary>
+        /// <param name="expression">The complete entity sequence, with or without paging.</param>
+        /// <param name="table">The synchronized table snapshot and its stored properties.</param>
+        /// <param name="defaultLanguage">The language used by fallback-enabled properties.</param>
+        /// <param name="page">The safe selection of shared objects to copy.</param>
+        /// <returns>True if results can be selected safely before making independent copies.</returns>
+        /// <exception cref="Exception">Expression rewriting or compilation fails.</exception>
+        private bool TryCreatePage(Expression expression, RAMCachedTable table, long defaultLanguage, out Func<IEnumerable<BlueprintEntity>, IEnumerable<BlueprintEntity>>? page)
+        {
+            page = null;
+            Stack<MethodCallExpression> operations = new Stack<MethodCallExpression>();
+            while (expression is MethodCallExpression call && call.Method.DeclaringType == typeof(Queryable))
+            {
+                if (!call.Method.IsGenericMethod || call.Method.GetGenericArguments()[0] != fContract || call.Arguments.Count < 2 || call.Arguments.Count > 3)
+                {
+                    return false;
+                }
+                operations.Push(call);
+                expression = call.Arguments[0];
+            }
+            if (expression is not ConstantExpression constant || constant.Value is not IQueryable query || !ReferenceEquals(query.Provider, fProvider) || query.ElementType != fContract)
+            {
+                return false;
+            }
+            CachedReadExpression visitor = new CachedReadExpression(fContract, table.ConcreteType, table.Properties, fLanguage, defaultLanguage);
+            ParameterExpression rows = Expression.Parameter(typeof(IEnumerable<BlueprintEntity>), "rows");
+            Expression source = rows;
+            foreach (MethodCallExpression operation in operations)
+            {
+                string name = operation.Method.Name;
+                switch (name)
+                {
+                    case nameof(Queryable.Where):
+                        if (operation.Arguments.Count != 2 || !visitor.TryRewriteLambda(operation.Arguments[1], out LambdaExpression? predicate))
+                        {
+                            return false;
+                        }
+                        source = Expression.Call(typeof(Enumerable), name, new[] { typeof(BlueprintEntity) }, source, predicate!);
+                        break;
+                    case nameof(Queryable.OrderBy):
+                    case nameof(Queryable.OrderByDescending):
+                    case nameof(Queryable.ThenBy):
+                    case nameof(Queryable.ThenByDescending):
+                        if (!visitor.TryRewriteLambda(operation.Arguments[1], out LambdaExpression? key))
+                        {
+                            return false;
+                        }
+                        if ((name == nameof(Queryable.ThenBy) || name == nameof(Queryable.ThenByDescending)) && !typeof(IOrderedEnumerable<BlueprintEntity>).IsAssignableFrom(source.Type))
+                        {
+                            return false;
+                        }
+                        List<Expression> arguments = new List<Expression> { source, key! };
+                        if (operation.Arguments.Count == 3)
+                        {
+                            if (operation.Arguments[2] is not ConstantExpression)
+                            {
+                                return false;
+                            }
+                            arguments.Add(operation.Arguments[2]);
+                        }
+                        source = Expression.Call(typeof(Enumerable), name, new[] { typeof(BlueprintEntity), key!.ReturnType }, arguments.ToArray());
+                        break;
+                    case nameof(Queryable.Skip):
+                    case nameof(Queryable.Take):
+                        if (operation.Arguments.Count != 2 || operation.Arguments[1] is not ConstantExpression { Value: int })
+                        {
+                            return false;
+                        }
+                        source = Expression.Call(typeof(Enumerable), name, new[] { typeof(BlueprintEntity) }, source, operation.Arguments[1]);
+                        break;
+                    default:
+                        return false;
+                }
+            }
+            page = Expression.Lambda<Func<IEnumerable<BlueprintEntity>, IEnumerable<BlueprintEntity>>>(source, rows).Compile();
+            return true;
+        }
+
         /// <summary>Reads only the selected fields and builds independent results without copying complete cached entities.</summary>
         /// <typeparam name="TElement">The projected result type.</typeparam>
         /// <param name="table">The synchronized table snapshot.</param>
@@ -239,7 +366,8 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
         private bool TryExecuteProjection<TElement>(RAMCachedTable table, BlueprintDatabaseContext context, Expression expression, out List<TElement>? items)
         {
             items = null;
-            if (!CachedProjection.TryCreate<TElement>(expression, fProvider, fContract, table.ConcreteType, table.Properties, fLanguage, context.EntityTypes.DefaultLanguageID, out Func<IEnumerable<BlueprintEntity>, IEnumerable<TElement>>? projection))
+            Func<Expression, Func<IEnumerable<BlueprintEntity>, IEnumerable<BlueprintEntity>>?> createSelection = source => TryCreatePage(source, table, context.EntityTypes.DefaultLanguageID, out Func<IEnumerable<BlueprintEntity>, IEnumerable<BlueprintEntity>>? page) ? page : null;
+            if (!CachedProjection.TryCreate<TElement>(expression, createSelection, fContract, table.ConcreteType, table.Properties, fLanguage, context.EntityTypes.DefaultLanguageID, out Func<IEnumerable<BlueprintEntity>, IEnumerable<TElement>>? projection))
             {
                 return false;
             }

@@ -10,7 +10,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
         /// <summary>Combines entity selection, a safe Select, and supported result operations in their original order.</summary>
         /// <typeparam name="TElement">The projected result type.</typeparam>
         /// <param name="expression">The complete projected sequence.</param>
-        /// <param name="provider">The provider of the single entity root.</param>
+        /// <param name="createSelection">Creates a safe selection for the entity source before Select, or returns null when unsupported.</param>
         /// <param name="contract">The entity class.</param>
         /// <param name="concreteType">The generated type of the cached entities.</param>
         /// <param name="properties">The stored properties of the entity.</param>
@@ -18,7 +18,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
         /// <param name="defaultLanguage">The language used by fallback-enabled properties.</param>
         /// <param name="projection">The sequence factory that returns only independent projected values.</param>
         /// <returns>True if the projection can execute without exposing shared entities or their mutable fields.</returns>
-        internal static bool TryCreate<TElement>(Expression expression, IQueryProvider provider, Type contract, Type concreteType, IProperty[] properties, long language, long defaultLanguage, out Func<IEnumerable<BlueprintEntity>, IEnumerable<TElement>>? projection)
+        internal static bool TryCreate<TElement>(Expression expression, Func<Expression, Func<IEnumerable<BlueprintEntity>, IEnumerable<BlueprintEntity>>?> createSelection, Type contract, Type concreteType, IProperty[] properties, long language, long defaultLanguage, out Func<IEnumerable<BlueprintEntity>, IEnumerable<TElement>>? projection)
         {
             projection = null;
             Stack<MethodCallExpression> operations = new Stack<MethodCallExpression>();
@@ -45,7 +45,8 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
             {
                 return false;
             }
-            if (!CachedPage.TryCreate(select.Arguments[0], provider, contract, concreteType, properties, language, defaultLanguage, out Func<IEnumerable<BlueprintEntity>, IEnumerable<BlueprintEntity>>? selection))
+            Func<IEnumerable<BlueprintEntity>, IEnumerable<BlueprintEntity>>? selection = createSelection(select.Arguments[0]);
+            if (selection == null)
             {
                 return false;
             }
