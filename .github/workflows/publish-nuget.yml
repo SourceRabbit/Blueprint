@@ -1,0 +1,36 @@
+name: Publish to NuGet
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check out release
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Pack Blueprint
+        run: dotnet pack "Visual Studio Project/Blueprint/Blueprint.csproj" -c Release -o artifacts -p:Version="$GITHUB_REF_NAME"
+
+      - name: Sign in to NuGet
+        id: login
+        uses: NuGet/login@v1
+        with:
+          user: SourceRabbit
+
+      - name: Publish package
+        env:
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+        run: dotnet nuget push artifacts/*.nupkg --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json
