@@ -129,6 +129,16 @@ namespace Blueprint.Tests.RAMCache
             Assert(CachedRecord.Update(copy) == 1, "The Entity API update must persist the edited copy.");
             Assert(query.Single(item => item.ID == insertedID).Price == 40m, "Blueprint updates must invalidate the cache even when the refresh interval is one hour.");
             Console.WriteLine("PASS: independent copies and immediate invalidation after Blueprint writes.");
+
+            const int CHANGED_RECORD_COUNT = 2105;
+            ExecuteSql(writer, """
+                WITH numbers AS (
+                    SELECT 1 AS n UNION ALL SELECT n + 1 FROM numbers WHERE n < @count
+                )
+                INSERT dbo.RAMCachedRecords (Price) SELECT 23 FROM numbers OPTION (MAXRECURSION 0);
+                """, new SqlParameter("@count", CHANGED_RECORD_COUNT));
+            Assert(WaitForBackgroundRefresh(database, () => query.Count(item => item.Price == 23m) == CHANGED_RECORD_COUNT), "One refresh must load every changed ID even when the delta exceeds the SQL parameter limit.");
+            Assert(query.Count() == CHANGED_RECORD_COUNT + 2, "A multi-batch refresh must retain unchanged rows.");
         }
 
         /// <summary>Checks primary-key filtering with the public Entity API, including queries that must keep their full source.</summary>

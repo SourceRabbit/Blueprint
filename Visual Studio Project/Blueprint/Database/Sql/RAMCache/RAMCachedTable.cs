@@ -12,11 +12,16 @@ namespace Blueprint.Database.Sql.RAMCache
     /// <summary>Stores a table's committed scalar values and corresponding synchronization position.</summary>
     internal sealed class RAMCachedTable
     {
+        /// <summary>A pending table snapshot. Null ChangedKeys invalidates every index after a full reload or an insertion/deletion.</summary>
+        internal sealed record Snapshot(Dictionary<long, BlueprintEntity> Rows, long BeginVersion, int ObjectID, HashSet<string>? ChangedKeys = null);
+
+        private const int CHANGED_ID_BATCH_SIZE = 1000;
         private readonly object fSyncRoot = new();
         private readonly Type fConcreteType;
         private readonly IProperty[] fProperties;
         private readonly Dictionary<string, IProperty> fLookupKeys;
-        private readonly Dictionary<string, ILookup<object?, BlueprintEntity>> fForeignKeyIndexes = new(StringComparer.Ordinal);
+        private readonly IProperty[] fIndexKeys;
+        private readonly Dictionary<string, ILookup<object?, long>> fForeignKeyIndexes = new(StringComparer.Ordinal);
         private readonly string fTableName;
         private readonly string fKeyColumn;
         private readonly Func<BlueprintDatabaseContext, string, object[], List<BlueprintEntity>> fReadRows;
@@ -36,6 +41,7 @@ namespace Blueprint.Database.Sql.RAMCache
             fProperties = entityType.GetProperties().ToArray();
             fLookupKeys = fProperties.Where(property => property.PropertyInfo != null && (property.ClrType == typeof(long) || property.ClrType == typeof(long?)))
                 .Where(property => property.IsPrimaryKey() || property.GetContainingForeignKeys().Any(key => key.Properties.Count == 1)).ToDictionary(property => property.Name, StringComparer.Ordinal);
+            fIndexKeys = fProperties.Where(property => property.PropertyInfo != null && property.Name != nameof(BlueprintEntity.ID) && (property.IsKey() || property.IsForeignKey())).ToArray();
             ISqlGenerationHelper sqlHelper = context.GetService<ISqlGenerationHelper>();
             fTableName = sqlHelper.DelimitIdentifier(entityType.GetTableName()!, entityType.GetSchema());
             StoreObjectIdentifier store = StoreObjectIdentifier.Table(entityType.GetTableName()!, entityType.GetSchema());
@@ -48,7 +54,7 @@ namespace Blueprint.Database.Sql.RAMCache
         /// <param name="version">The version of the current snapshot transaction.</param>
         /// <returns>The new data and the identity of the active history.</returns>
         /// <exception cref="InvalidOperationException">Change Tracking is not enabled on the selected table.</exception>
-        internal (Dictionary<long, BlueprintEntity> Rows, long BeginVersion, int ObjectID) ReadSnapshot(BlueprintDatabaseContext context, long version)
+        internal Snapshot ReadSnapshot(BlueprintDatabaseContext context, long version)
         {
             long minimumVersion;
             long beginVersion;
@@ -70,11 +76,11 @@ namespace Blueprint.Database.Sql.RAMCache
             // TRUNCATE or re-enabling tracking may retain the same version if no tracked DML occurred in between.
             if (!fVersion.HasValue || fVersion.Value <= minimumVersion || fVersion.Value > version || fBeginVersion != beginVersion || fObjectID != objectID)
             {
-                return (fReadRows(context, $"SELECT * FROM {fTableName}", Array.Empty<object>()).ToDictionary(entity => entity.ID), beginVersion, objectID);
+                return new Snapshot(fReadRows(context, $"SELECT * FROM {fTableName}", Array.Empty<object>()).ToDictionary(entity => entity.ID), beginVersion, objectID);
             }
             if (fVersion.Value == version)
             {
-                return (fRows, beginVersion, objectID);
+                return new Snapshot(fRows, beginVersion, objectID);
             }
             List<long> changedIDs = new List<long>();
             using (DbCommand command = SqlSchemaInitializer.CreateCommand(context, $"SELECT {fKeyColumn} FROM CHANGETABLE(CHANGES {fTableName}, @cacheVersion) AS changes;"))
@@ -90,39 +96,67 @@ namespace Blueprint.Database.Sql.RAMCache
             }
             if (changedIDs.Count == 0)
             {
-                return (fRows, beginVersion, objectID);
+                return new Snapshot(fRows, beginVersion, objectID);
             }
             Dictionary<long, BlueprintEntity> rows = new Dictionary<long, BlueprintEntity>(fRows);
-            foreach (long id in changedIDs)
+            HashSet<long> missingIDs = changedIDs.ToHashSet();
+            HashSet<string>? changedKeys = new(StringComparer.Ordinal);
+            foreach (long[] batch in changedIDs.Chunk(CHANGED_ID_BATCH_SIZE))
+            {
+                SqlParameter[] parameters = batch.Select((id, index) => new SqlParameter($"@id{index}", id)).ToArray();
+                string keyParameters = string.Join(", ", parameters.Select(parameter => parameter.ParameterName));
+                string sql = $"SELECT * FROM {fTableName} WHERE {fKeyColumn} IN ({keyParameters})";
+                foreach (BlueprintEntity entity in fReadRows(context, sql, parameters))
+                {
+                    missingIDs.Remove(entity.ID);
+                    if (!fRows.TryGetValue(entity.ID, out BlueprintEntity? previous))
+                    {
+                        changedKeys = null;
+                    }
+                    else if (changedKeys != null)
+                    {
+                        foreach (IProperty key in fIndexKeys)
+                        {
+                            PropertyInfo property = key.PropertyInfo!;
+                            if (!Equals(property.GetValue(previous), property.GetValue(entity)))
+                            {
+                                changedKeys.Add(key.Name);
+                            }
+                        }
+                    }
+                    rows[entity.ID] = entity;
+                }
+            }
+            foreach (long id in missingIDs)
             {
                 rows.Remove(id);
             }
-            string sql = $"SELECT source.* FROM {fTableName} AS source INNER JOIN CHANGETABLE(CHANGES {fTableName}, @cacheVersion) AS changes ON source.{fKeyColumn} = changes.{fKeyColumn}";
-            foreach (BlueprintEntity entity in fReadRows(context, sql, new object[] { new SqlParameter("@cacheVersion", fVersion.Value) }))
-            {
-                rows[entity.ID] = entity;
-            }
-            return (rows, beginVersion, objectID);
+            return new Snapshot(rows, beginVersion, objectID, missingIDs.Count == 0 ? changedKeys : null);
         }
 
         /// <summary>Publishes only data read and validated in the same successful transaction.</summary>
-        /// <param name="rows">The complete data of the new snapshot.</param>
+        /// <param name="snapshot">The committed rows, table identity and changes to indexed keys.</param>
         /// <param name="version">The new synchronization position.</param>
-        /// <param name="beginVersion">The start of the active Change Tracking history.</param>
-        /// <param name="objectID">The SQL table identity.</param>
-        internal void Publish(Dictionary<long, BlueprintEntity> rows, long version, long beginVersion, int objectID)
+        internal void Publish(Snapshot snapshot, long version)
         {
             lock (fSyncRoot)
             {
-                if (!ReferenceEquals(fRows, rows))
+                if (snapshot.ChangedKeys != null)
+                {
+                    foreach (string key in snapshot.ChangedKeys)
+                    {
+                        fForeignKeyIndexes.Remove(key);
+                    }
+                }
+                else if (!ReferenceEquals(fRows, snapshot.Rows))
                 {
                     fForeignKeyIndexes.Clear();
                     fRowPositions = null;
                 }
-                fRows = rows;
+                fRows = snapshot.Rows;
                 fVersion = version;
-                fBeginVersion = beginVersion;
-                fObjectID = objectID;
+                fBeginVersion = snapshot.BeginVersion;
+                fObjectID = snapshot.ObjectID;
             }
         }
 
@@ -163,7 +197,10 @@ namespace Blueprint.Database.Sql.RAMCache
                     }
                     else
                     {
-                        rows.AddRange(GetOrCreateForeignKeyIndex(key)[id]);
+                        foreach (long rowID in GetOrCreateForeignKeyIndex(key)[id])
+                        {
+                            rows.Add(fRows[rowID]);
+                        }
                     }
                 }
                 return rows;
@@ -181,7 +218,7 @@ namespace Blueprint.Database.Sql.RAMCache
                 return Array.Empty<BlueprintEntity>();
             }
             Dictionary<long, BlueprintEntity> snapshot;
-            ILookup<object?, BlueprintEntity>? groups;
+            ILookup<object?, long>? groups;
             Dictionary<long, int> positions;
             lock (fSyncRoot)
             {
@@ -203,7 +240,10 @@ namespace Blueprint.Database.Sql.RAMCache
             {
                 if (groups != null)
                 {
-                    matches.AddRange(groups[id]);
+                    foreach (long rowID in groups[id])
+                    {
+                        matches.Add(snapshot[rowID]);
+                    }
                 }
                 else if (id.HasValue && snapshot.TryGetValue(id.Value, out BlueprintEntity? entity))
                 {
@@ -213,7 +253,7 @@ namespace Blueprint.Database.Sql.RAMCache
             return matches.Count < 2 ? matches : matches.OrderBy(entity => positions[entity.ID]).ToArray();
         }
 
-        /// <summary>Returns one immutable group from the same per-snapshot index used for relationship loading.</summary>
+        /// <summary>Resolves one indexed group against the rows published with that index.</summary>
         /// <param name="foreignKey">The mapped dependent key.</param>
         /// <param name="id">The requested parent ID, including null for unassigned rows.</param>
         /// <returns>The matching rows in snapshot order, or an empty group when no rows match.</returns>
@@ -221,18 +261,19 @@ namespace Blueprint.Database.Sql.RAMCache
         {
             lock (fSyncRoot)
             {
-                return GetOrCreateForeignKeyIndex(foreignKey)[id];
+                Dictionary<long, BlueprintEntity> snapshot = fRows;
+                return GetOrCreateForeignKeyIndex(foreignKey)[id].Select(rowID => snapshot[rowID]);
             }
         }
 
-        /// <summary>Builds the index once for the current snapshot. The caller holds the table lock.</summary>
+        /// <summary>Groups row IDs by key independently of the scalar row instances. The caller holds the table lock.</summary>
         /// <param name="foreignKey">The mapped foreign key to index.</param>
-        /// <returns>Groups of dependent rows in snapshot order, keyed by their stored foreign-key value.</returns>
-        private ILookup<object?, BlueprintEntity> GetOrCreateForeignKeyIndex(IProperty foreignKey)
+        /// <returns>Groups of row IDs in snapshot order, keyed by their stored foreign-key value.</returns>
+        private ILookup<object?, long> GetOrCreateForeignKeyIndex(IProperty foreignKey)
         {
-            if (!fForeignKeyIndexes.TryGetValue(foreignKey.Name, out ILookup<object?, BlueprintEntity>? index))
+            if (!fForeignKeyIndexes.TryGetValue(foreignKey.Name, out ILookup<object?, long>? index))
             {
-                index = fRows.Values.ToLookup(row => foreignKey.PropertyInfo!.GetValue(row));
+                index = fRows.Values.ToLookup(row => foreignKey.PropertyInfo!.GetValue(row), row => row.ID);
                 fForeignKeyIndexes.Add(foreignKey.Name, index);
             }
             return index;

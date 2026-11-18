@@ -122,16 +122,15 @@ namespace Blueprint.Database.Sql.RAMCache
                     {
                         throw new InvalidOperationException("SQL Server Change Tracking must remain enabled while RAMCached entities are in use.");
                     }
-                    List<(RAMCachedTable Table, Dictionary<long, BlueprintEntity> Rows, long BeginVersion, int ObjectID)> snapshots = new List<(RAMCachedTable, Dictionary<long, BlueprintEntity>, long, int)>();
+                    List<(RAMCachedTable Table, RAMCachedTable.Snapshot Snapshot)> snapshots = new();
                     foreach (RAMCachedTable table in fRAMCachedTables.Values)
                     {
-                        (Dictionary<long, BlueprintEntity> rows, long beginVersion, int objectID) = table.ReadSnapshot(context, version);
-                        snapshots.Add((table, rows, beginVersion, objectID));
+                        snapshots.Add((table, table.ReadSnapshot(context, version)));
                     }
                     transaction.Commit();
-                    foreach ((RAMCachedTable table, Dictionary<long, BlueprintEntity> rows, long beginVersion, int objectID) in snapshots)
+                    foreach ((RAMCachedTable table, RAMCachedTable.Snapshot snapshot) in snapshots)
                     {
-                        table.Publish(rows, version, beginVersion, objectID);
+                        table.Publish(snapshot, version);
                     }
                 }
                 fLastRefresh = Stopwatch.GetTimestamp();

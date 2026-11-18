@@ -7,6 +7,7 @@ using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Diagnostics;
+using System.Reflection;
 
 namespace Blueprint.Tests.RAMCache
 {
@@ -154,6 +155,16 @@ namespace Blueprint.Tests.RAMCache
             Assert(!variants.Any(), "A parent without variants must have an empty group.");
             ExecuteSql(writer, "UPDATE dbo.IncludeProducts SET ParentProductID = 1 WHERE ID IN (2, 3);");
             WaitForRefresh(database, () => variants.Count() == 2);
+            IncludedProduct retained = variants.OrderBy(product => product.ID).First();
+            object parentIndex = getParentProductIndex(database);
+            long[] originalOrder = variants.Select(product => product.ID).ToArray();
+            ExecuteSql(writer, "UPDATE dbo.IncludeProducts SET Title = N'Renamed' WHERE ID IN (1, 2, 3);");
+            WaitForRefresh(database, () => IncludedProduct.Where(product => product.ID == 1).Single().Title == "Renamed");
+            Assert(ReferenceEquals(parentIndex, getParentProductIndex(database)), "Title-only updates must retain the populated parent index.");
+            Assert(variants.Select(product => product.Title).ToArray().All(title => title == "Renamed") && retained.Title != "Renamed", "Indexed variant reads must resolve new titles without mutating previously returned rows.");
+            Assert(variants.Select(product => product.ID).ToArray().SequenceEqual(originalOrder), "Updating several titles must preserve the group's snapshot order.");
+            long[] parents = { 1 };
+            Assert(IncludedProduct.Where(product => product.ParentProductID.HasValue && parents.Contains(product.ParentProductID.Value)).Select(product => product.Title).ToArray().SequenceEqual(new[] { "Renamed", "Renamed" }), "Multi-key lookup must read updated rows from the preserved index.");
             Assert(variants.OrderByDescending(product => product.ID).Select(product => product.ID).ToArray().SequenceEqual(new long[] { 3, 2 }), "All matching variants must survive ordering and projection.");
             Assert(variants.OrderBy(product => product.ID).Skip(1).Take(1).Single().ID == 3, "Paging must apply within the selected parent group.");
             Assert(IncludedProduct.Where(product => parentID == product.ParentProductID && product.ID > 2).Single().ID == 3, "Reversed equality and residual filters must select only the requested variant.");
@@ -176,6 +187,19 @@ namespace Blueprint.Tests.RAMCache
             ExecuteSql(writer, "DELETE FROM dbo.IncludeProducts WHERE ID = 4;");
             WaitForRefresh(database, () => variants.Count() == 1);
             Assert(variants.Single().ID == 2, "A deleted variant must leave the index after synchronization.");
+        }
+
+        /// <summary>Returns the populated parent index so a test can distinguish reuse from rebuilding an equivalent index.</summary>
+        /// <param name="database">The database that owns the cached product table.</param>
+        /// <returns>The actual lookup used by the product table.</returns>
+        /// <exception cref="InvalidOperationException">The parent index has not been populated.</exception>
+        private static object getParentProductIndex(BlueprintDatabase database)
+        {
+            using BlueprintDatabaseContext context = database.GetContext();
+            const BindingFlags FLAGS = BindingFlags.NonPublic | BindingFlags.Instance;
+            object table = typeof(BlueprintDatabase).GetMethod("GetCachedTable", FLAGS)!.Invoke(database, new object[] { typeof(IncludedProduct), context })!;
+            var indexes = (System.Collections.IDictionary)table.GetType().GetField("fForeignKeyIndexes", FLAGS)!.GetValue(table)!;
+            return indexes[nameof(IncludedProduct.ParentProductID)] ?? throw new InvalidOperationException("Missing parent index.");
         }
 
         /// <summary>Checks membership against snapshot order, nullable parents, current inputs and custom comparison semantics.</summary>
