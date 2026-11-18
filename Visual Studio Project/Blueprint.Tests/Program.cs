@@ -6,7 +6,7 @@ namespace Blueprint.Tests
     internal static class Program
     {
         /// <summary>Runs isolated entity class, SQL command, log, or RAM cache checks, or the configured performance test.</summary>
-        /// <remarks>Use --context-pool-insert &lt;compiledPoolSize&gt; [server] [productCount] to insert a Product list using one worker thread per pool slot in a temporary SQL database.</remarks>
+        /// <remarks>Use --context-pool-insert &lt;poolSize&gt; [server] [productCount] to insert a Product list using one worker thread per pool slot in a temporary SQL database.</remarks>
         /// <param name="args">Use --entity-classes for model/query/lifecycle checks, --entity-classes-sql for class persistence, --multilingual-fallback for translations, --sql-execute-non-query for standalone SQL commands, --sql-log for logging, --ram-cache-auto-include for cached relationships, or --ram-cache-change-tracking for synchronization; otherwise run the configured performance test.</param>
         /// <returns>Zero on success or one on failure.</returns>
         private static int Main(string[] args)

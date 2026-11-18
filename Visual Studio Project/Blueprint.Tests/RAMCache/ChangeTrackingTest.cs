@@ -83,6 +83,7 @@ namespace Blueprint.Tests.RAMCache
             CachedRecord.Insert(new[] { updated, deleted });
             Assert(query.Count() == 2, "Blueprint inserts must invalidate the cache for the next read.");
             CheckPageArguments(updated.ID, deleted.ID);
+            CheckPrimaryKeyLookup(updated.ID, deleted.ID);
             CachedRecord retained = query.Single(item => item.ID == updated.ID);
 
             Assert(ExecuteSql(writer, "UPDATE dbo.RAMCachedRecords SET Price = 15, TitleEN = N'Updated EN' WHERE ID = @id;", new SqlParameter("@id", updated.ID)) == 1, "The external SQL update must affect the intended row.");
@@ -128,6 +129,40 @@ namespace Blueprint.Tests.RAMCache
             Assert(CachedRecord.Update(copy) == 1, "The Entity API update must persist the edited copy.");
             Assert(query.Single(item => item.ID == insertedID).Price == 40m, "Blueprint updates must invalidate the cache even when the refresh interval is one hour.");
             Console.WriteLine("PASS: independent copies and immediate invalidation after Blueprint writes.");
+        }
+
+        /// <summary>Checks primary-key filtering with the public Entity API, including queries that must keep their full source.</summary>
+        /// <param name="firstID">The ID of the record priced at ten.</param>
+        /// <param name="secondID">The ID of the record priced at twenty.</param>
+        /// <exception cref="Exception">A query returned an incorrect row, count, projection or order.</exception>
+        private void CheckPrimaryKeyLookup(long firstID, long secondID)
+        {
+            long id = firstID;
+            IQueryable<CachedRecord> filtered = CachedRecord.Where(record => record.ID == id && record.Price >= 20m);
+            Assert(filtered.SingleOrDefault() == null, "The remaining filter must reject a matching primary key.");
+            id = secondID;
+            Assert(filtered.Select(record => record.Price).Single() == 20m && filtered.Count() == 1 && filtered.Any(), "The same query must use its current ID for scalar operations.");
+            Assert(filtered.Select(record => record.Price).ToArray().SequenceEqual(new[] { 20m }), "A projection must use the same candidate as an entity query.");
+            Assert(CachedRecord.Where(record => record.Price >= 20m && id == record.ID).ToList().Single().ID == id, "Either operand order and a preceding scalar filter must select the correct row.");
+            Assert(CachedRecord.Where(record => record.Price >= 20m).Where(record => record.ID == id).LongCount() == 1L, "Consecutive Where operations must keep both predicates.");
+            Assert(!filtered.Skip(1).Take(1).Any(), "Paging after the lookup must apply to the filtered sequence.");
+            long lastID = Math.Max(firstID, secondID);
+            Assert(!CachedRecord.Where(record => true).OrderBy(record => record.ID).Take(1).Where(record => record.ID == lastID).Any(), "A lookup must not move across preceding pagination.");
+            Assert(CachedRecord.Where(record => record.ID == firstID || record.ID == secondID).Count() == 2, "Disjunction must retain both candidates.");
+            id = -1;
+            Assert(!filtered.Any() && filtered.Count() == 0 && filtered.SingleOrDefault() == null, "A missing key must yield an empty sequence.");
+            AssertThrows<InvalidOperationException>(() => filtered.Single(), "Single must throw for a missing primary key.");
+
+            long[] sourceOrder = CachedRecord.Where(record => true).Select(record => record.ID).ToArray();
+            long changingID = sourceOrder[0];
+            long nextID = sourceOrder[1];
+            Func<bool> advance = () =>
+            {
+                changingID = nextID;
+                return true;
+            };
+            long[] moving = CachedRecord.Where(record => record.ID == changingID && advance()).Select(record => record.ID).ToArray();
+            Assert(moving.SequenceEqual(sourceOrder), "A callback that changes the captured ID must preserve enumeration semantics.");
         }
 
         /// <summary>Checks that repeated page shapes take their arguments from the current execution, including concurrent callers.</summary>

@@ -5,7 +5,6 @@ using Blueprint.Entities;
 using Blueprint.Fundamentals;
 using Microsoft.Data.SqlClient;
 using System.Diagnostics;
-using System.Reflection;
 using Product = Blueprint.Tests.Tutorial1.Product;
 
 namespace Blueprint.Tests.Database
@@ -13,19 +12,20 @@ namespace Blueprint.Tests.Database
     /// <summary>Μετρά πραγματικές εισαγωγές Product μέσω Entity API με συγκεκριμένο μέγεθος pool.</summary>
     internal sealed class ContextPoolInsertTest : BlueprintTest
     {
-        private readonly int fExpectedPoolSize;
+        private readonly int fPoolSize;
         private readonly string? fServer;
         private readonly int fProductCount;
 
         /// <summary>Ορίζει το μέγεθος pool, τον server και το πλήθος εγγραφών της δοκιμής.</summary>
-        /// <param name="expectedPoolSize">Το μέγεθος που πρέπει να έχει μεταγλωττιστεί στη βιβλιοθήκη.</param>
+        /// <param name="poolSize">The number of contexts to reserve for the test database.</param>
         /// <param name="server">Προαιρετικό όνομα SQL Server χωρίς αλλαγή της κοινής ρύθμισης.</param>
         /// <param name="productCount">Ο αριθμός των μεμονωμένων εισαγωγών που θα μετρηθούν.</param>
-        /// <exception cref="ArgumentOutOfRangeException">Το πλήθος προϊόντων δεν είναι θετικό.</exception>
-        public ContextPoolInsertTest(int expectedPoolSize, string? server = null, int productCount = 1)
+        /// <exception cref="ArgumentOutOfRangeException">The pool size or product count is less than one.</exception>
+        public ContextPoolInsertTest(int poolSize, string? server = null, int productCount = 1)
         {
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(poolSize);
             ArgumentOutOfRangeException.ThrowIfNegativeOrZero(productCount);
-            fExpectedPoolSize = expectedPoolSize;
+            fPoolSize = poolSize;
             fServer = server;
             fProductCount = productCount;
         }
@@ -35,8 +35,7 @@ namespace Blueprint.Tests.Database
         public override void RunTest()
         {
             ResetAssertions();
-            int poolSize = (int)typeof(BlueprintDatabase).GetField("CONTEXT_POOL_SIZE", BindingFlags.Static | BindingFlags.NonPublic)!.GetRawConstantValue()!;
-            Assert(poolSize == fExpectedPoolSize, "The compiled pool size must match the requested test size.");
+            int poolSize = fPoolSize;
             string databaseName = "BlueprintPoolInsert_" + poolSize + "_" + Guid.NewGuid().ToString("N");
             SqlConnectionStringBuilder settings = new SqlConnectionStringBuilder(fDatabaseConnectionString) { InitialCatalog = "master", Pooling = true, ConnectTimeout = 5 };
             if (fServer != null)
@@ -48,7 +47,7 @@ namespace Blueprint.Tests.Database
                 observer.Open();
                 try
                 {
-                    using (SqlDatabase database = new SqlDatabase(databaseName, settings.ConnectionString, new List<BlueprintLanguage> { new BlueprintLanguage(1, string.Empty) }))
+                    using (SqlDatabase database = new SqlDatabase(databaseName, settings.ConnectionString, new List<BlueprintLanguage> { new BlueprintLanguage(1, string.Empty) }, poolSize))
                     {
                         database.RAMCacheRefreshInterval = TimeSpan.FromHours(1);
                         database.RegisterEntity<Product>();
@@ -152,7 +151,10 @@ namespace Blueprint.Tests.Database
                         List<Product> stored = Product.Where(item => item.ID > 0).OrderBy(item => item.ID).ToList();
                         Assert(stored.Count == fProductCount && stored.Zip(products.OrderBy(product => product.ID)).All(pair => pair.First.ID == pair.Second.ID && pair.First.SKU == pair.Second.SKU && pair.First.Title == pair.Second.Title && pair.First.Price == pair.Second.Price), "Entity queries must read every inserted product correctly through the refreshed RAM cache.");
                         Console.WriteLine(FormattableString.Invariant($"RESULT pool={poolSize} threads={poolSize} products={fProductCount} insert_ms={stopwatch.Elapsed.TotalMilliseconds:F3} inserts_per_second={fProductCount / stopwatch.Elapsed.TotalSeconds:F2} sql_verified=true entity_verified=true"));
-                        CheckConcurrentTransactions(database);
+                        if (poolSize > 1)
+                        {
+                            CheckConcurrentTransactions(database);
+                        }
                     }
                 }
                 finally

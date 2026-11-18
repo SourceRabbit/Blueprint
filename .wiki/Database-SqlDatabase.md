@@ -10,7 +10,9 @@ Before writing code, read [Contributing](Contributing.md). Follow [Getting Start
 
 Every database is configured with a name, a connection string, and a `List<BlueprintLanguage>`. The base constructor validates and stores these settings; the concrete provider establishes the database connection and initializes its context.
 
-For SQL Server, the public constructor is `SqlDatabase(string name, string connectionString, List<BlueprintLanguage> languages)`. The database name overrides `Database` or `Initial Catalog` in the connection string. Connection or database-creation errors can occur during construction.
+For SQL Server, the public constructor is `SqlDatabase(string name, string connectionString, List<BlueprintLanguage> languages, int poolSize = 10)`. The database name overrides `Database` or `Initial Catalog` in the connection string. Connection or database-creation errors can occur during construction.
+
+Omit `poolSize` to use 10 EF Core contexts, or pass a positive value such as `new SqlDatabase(name, connectionString, languages, poolSize: 4)` to use four. The size is fixed for the lifetime of the instance. When upgrading from the three-parameter constructor, rebuild applications and derived providers against the updated library.
 
 Create each language with `new BlueprintLanguage(id, prefix)`. Its `ID` and `Prefix` are read-only properties; do not assign them with an object initializer.
 
@@ -339,7 +341,7 @@ When switching configurations, finish existing work, dispose the old database, c
 
 ## Concurrent access
 
-Database operations coordinate through a shared lock to protect the EF Core context. Query execution, writes, registration, and disposal on the same database instance use this synchronization.
+Independent Entity operations reserve separate EF Core contexts and can run concurrently up to the configured pool size. When every context is in use, the next operation waits for a context to be returned. Return all reserved contexts before registering entities or disposing the database.
 
 This synchronization does not make concurrent edits to an entity object safe, and it does not synchronize separate database instances or processes. Those writers are governed by database isolation, constraints, and concurrency tokens.
 

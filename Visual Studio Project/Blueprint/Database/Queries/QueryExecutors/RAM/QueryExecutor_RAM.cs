@@ -123,7 +123,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
         private IQueryable? GetQuery(BlueprintDatabaseContext context, Expression expression, bool includeRelated)
         {
             RAMCachedTable? table = GetTable(context, expression, includeRelated);
-            return table == null ? null : CreateQuery(table, context);
+            return table == null ? null : CreateQuery(table, context, expression);
         }
 
         /// <summary>Returns the count or evaluates safe filters on existing objects without copying or changing the language.</summary>
@@ -147,7 +147,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
             {
                 return false;
             }
-            int matches = predicate == null ? table.Rows.Count : table.Rows.Values.Count(predicate);
+            int matches = predicate == null ? table.Rows.Count : CachedKeyLookup.SelectRows(table, expression, fProvider).Count(predicate);
             count = call.Method.Name == nameof(Queryable.LongCount) ? (object)(long)matches : matches;
             return true;
         }
@@ -237,7 +237,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
                 }
                 predicate = (Func<BlueprintEntity, bool>)lambda!.Compile();
             }
-            IEnumerable<BlueprintEntity> rows = selection!(table.Rows.Values);
+            IEnumerable<BlueprintEntity> rows = selection!(CachedKeyLookup.SelectRows(table, expression, fProvider));
             BlueprintEntity? stored = call.Method.Name switch
             {
                 nameof(Queryable.First) => predicate == null ? rows.First() : rows.First(predicate),
@@ -269,7 +269,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
                 return false;
             }
             List<TElement> results = new List<TElement>();
-            foreach (BlueprintEntity stored in page!(table.Rows.Values))
+            foreach (BlueprintEntity stored in page!(CachedKeyLookup.SelectRows(table, expression, fProvider)))
             {
                 results.Add((TElement)(object)table.Copy(stored, fLanguage));
             }
@@ -376,20 +376,21 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
             {
                 return false;
             }
-            items = projection!(table.Rows.Values).ToList();
+            items = projection!(CachedKeyLookup.SelectRows(table, expression, fProvider)).ToList();
             return true;
         }
 
         /// <summary>Copies cached data so that changes to properties, arrays, and language remain private to the caller.</summary>
         /// <param name="table">The synchronized table snapshot.</param>
         /// <param name="context">The current model used for relationship reads.</param>
+        /// <param name="expression">The query whose root filters may restrict the rows to copy.</param>
         /// <returns>A LINQ query over independent instances of the public entity class.</returns>
-        private IQueryable CreateQuery(RAMCachedTable table, BlueprintDatabaseContext context)
+        private IQueryable CreateQuery(RAMCachedTable table, BlueprintDatabaseContext context, Expression expression)
         {
-            IReadOnlyDictionary<long, BlueprintEntity> rows = table.Rows;
-            Array entities = Array.CreateInstance(fContract, rows.Count);
+            IEnumerable<BlueprintEntity> rows = CachedKeyLookup.SelectRows(table, expression, fProvider);
+            Array entities = Array.CreateInstance(fContract, rows.Count());
             int index = 0;
-            foreach (BlueprintEntity stored in rows.Values)
+            foreach (BlueprintEntity stored in rows)
             {
                 entities.SetValue(table.Copy(stored, fLanguage), index++);
             }

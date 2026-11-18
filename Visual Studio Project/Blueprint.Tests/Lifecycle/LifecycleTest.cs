@@ -96,7 +96,9 @@ namespace Blueprint.Tests.Lifecycle
         /// <exception cref="Exception">Αποτυγχάνει έλεγχος του pool ή ο συγχρονισμός των threads.</exception>
         private void CheckContextPool()
         {
-            using (ModelDatabase database = new ModelDatabase(CreateLanguages()))
+            AssertThrows<ArgumentOutOfRangeException>(() => new SqlDatabase("LifecycleModel", fDatabaseConnectionString, CreateLanguages(), poolSize: 0), "An empty pool must be rejected before SQL initialization.");
+            AssertThrows<ArgumentOutOfRangeException>(() => new ModelDatabase(CreateLanguages(), poolSize: -1), "A negative pool size must be rejected.");
+            using (ModelDatabase database = new ModelDatabase(CreateLanguages(), poolSize: 5))
             using (ManualResetEventSlim started = new ManualResetEventSlim())
             using (ManualResetEventSlim acquired = new ManualResetEventSlim())
             using (ManualResetEventSlim finish = new ManualResetEventSlim())
@@ -468,8 +470,9 @@ namespace Blueprint.Tests.Lifecycle
             /// <summary>Ελέγχει την ενεργοποίηση από τον base constructor και αρχικοποιεί τον provider με προαιρετική αποτυχία.</summary>
             /// <param name="languages">Οι γλώσσες που αντιγράφονται στη βάση.</param>
             /// <param name="failInitialization">Αν πρέπει να αποτύχει η αρχικοποίηση του schema.</param>
+            /// <param name="poolSize">The number of contexts in the model database's pool.</param>
             /// <exception cref="Exception">Αποτυγχάνει η αρχικοποίηση του provider ή η ταυτόχρονη ενεργοποίηση.</exception>
-            public ModelDatabase(List<BlueprintLanguage> languages, bool failInitialization = false) : base("LifecycleModel", "Server=unused;Database=LifecycleModel", languages)
+            public ModelDatabase(List<BlueprintLanguage> languages, bool failInitialization = false, int poolSize = 10) : base("LifecycleModel", "Server=unused;Database=LifecycleModel", languages, poolSize)
             {
                 fFailInitialization = failInitialization;
                 try

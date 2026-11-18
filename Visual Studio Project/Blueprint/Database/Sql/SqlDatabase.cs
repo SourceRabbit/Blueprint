@@ -22,12 +22,14 @@ namespace Blueprint.Database.Sql
         /// <param name="name">The application database name.</param>
         /// <param name="connectionString">The SQL Server connection settings.</param>
         /// <param name="languages">The model languages, with unique IDs and prefixes and exactly one language with an empty Prefix.</param>
+        /// <param name="poolSize">The number of EF Core contexts in this database's pool. Defaults to 10.</param>
         /// <exception cref="ArgumentNullException">No language list was provided.</exception>
         /// <exception cref="ArgumentException">The name, connection settings, or languages are invalid.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">The pool size is less than one.</exception>
         /// <exception cref="InvalidOperationException">Another database is active.</exception>
         /// <exception cref="SqlException">Connecting to or creating the database fails.</exception>
         /// <exception cref="Exception">The initialization failure is propagated after resources are released.</exception>
-        public SqlDatabase(string name, string connectionString, List<BlueprintLanguage> languages) : base(name, NormalizeConnectionString(name, connectionString), languages)
+        public SqlDatabase(string name, string connectionString, List<BlueprintLanguage> languages, int poolSize = 10) : base(name, NormalizeConnectionString(name, connectionString), languages, poolSize)
         {
             try
             {

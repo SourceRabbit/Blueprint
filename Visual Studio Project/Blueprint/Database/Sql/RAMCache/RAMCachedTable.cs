@@ -15,11 +15,13 @@ namespace Blueprint.Database.Sql.RAMCache
         private readonly object fSyncRoot = new();
         private readonly Type fConcreteType;
         private readonly IProperty[] fProperties;
-        private readonly Dictionary<IProperty, ILookup<object?, BlueprintEntity>> fForeignKeyIndexes = new Dictionary<IProperty, ILookup<object?, BlueprintEntity>>();
+        private readonly Dictionary<string, IProperty> fLookupKeys;
+        private readonly Dictionary<string, ILookup<object?, BlueprintEntity>> fForeignKeyIndexes = new(StringComparer.Ordinal);
         private readonly string fTableName;
         private readonly string fKeyColumn;
         private readonly Func<BlueprintDatabaseContext, string, object[], List<BlueprintEntity>> fReadRows;
         private Dictionary<long, BlueprintEntity> fRows = new Dictionary<long, BlueprintEntity>();
+        private Dictionary<long, int>? fRowPositions;
         private long? fVersion;
         private long fBeginVersion;
         private int fObjectID;
@@ -32,6 +34,8 @@ namespace Blueprint.Database.Sql.RAMCache
             fConcreteType = context.EntityTypes.Types[contract];
             IEntityType entityType = context.Model.FindEntityType(fConcreteType)!;
             fProperties = entityType.GetProperties().ToArray();
+            fLookupKeys = fProperties.Where(property => property.PropertyInfo != null && (property.ClrType == typeof(long) || property.ClrType == typeof(long?)))
+                .Where(property => property.IsPrimaryKey() || property.GetContainingForeignKeys().Any(key => key.Properties.Count == 1)).ToDictionary(property => property.Name, StringComparer.Ordinal);
             ISqlGenerationHelper sqlHelper = context.GetService<ISqlGenerationHelper>();
             fTableName = sqlHelper.DelimitIdentifier(entityType.GetTableName()!, entityType.GetSchema());
             StoreObjectIdentifier store = StoreObjectIdentifier.Table(entityType.GetTableName()!, entityType.GetSchema());
@@ -113,6 +117,7 @@ namespace Blueprint.Database.Sql.RAMCache
                 if (!ReferenceEquals(fRows, rows))
                 {
                     fForeignKeyIndexes.Clear();
+                    fRowPositions = null;
                 }
                 fRows = rows;
                 fVersion = version;
@@ -158,28 +163,79 @@ namespace Blueprint.Database.Sql.RAMCache
                     }
                     else
                     {
-                        foreach (BlueprintEntity entity in GetReferencingRows(key, id))
-                        {
-                            rows.Add(entity);
-                        }
+                        rows.AddRange(GetOrCreateForeignKeyIndex(key)[id]);
                     }
                 }
                 return rows;
             }
         }
 
-        /// <summary>Indexes dependent rows once per snapshot to avoid scanning the table for every included collection.</summary>
-        /// <param name="foreignKey">The mapped foreign key on this table.</param>
-        /// <param name="id">The principal row's ID.</param>
-        /// <returns>The dependent rows belonging to the principal.</returns>
-        private IEnumerable<BlueprintEntity> GetReferencingRows(IProperty foreignKey, long id)
+        /// <summary>Reads distinct key hits from one snapshot and restores its row order for stable paging and sorting.</summary>
+        /// <param name="key">The indexed primary or foreign key.</param>
+        /// <param name="ids">The requested values; duplicate or missing keys do not add rows.</param>
+        /// <returns>The matching rows in their original snapshot order.</returns>
+        internal IEnumerable<BlueprintEntity> GetRowsByKeys(IProperty key, IEnumerable<long?> ids)
         {
-            if (!fForeignKeyIndexes.TryGetValue(foreignKey, out ILookup<object?, BlueprintEntity>? index))
+            if (ids.TryGetNonEnumeratedCount(out int count) && count == 0)
+            {
+                return Array.Empty<BlueprintEntity>();
+            }
+            Dictionary<long, BlueprintEntity> snapshot;
+            ILookup<object?, BlueprintEntity>? groups;
+            Dictionary<long, int> positions;
+            lock (fSyncRoot)
+            {
+                snapshot = fRows;
+                groups = key.IsPrimaryKey() ? null : GetOrCreateForeignKeyIndex(key);
+                if (fRowPositions == null)
+                {
+                    Dictionary<long, int> order = new(snapshot.Count);
+                    foreach (long id in snapshot.Keys)
+                    {
+                        order.Add(id, order.Count);
+                    }
+                    fRowPositions = order;
+                }
+                positions = fRowPositions;
+            }
+            List<BlueprintEntity> matches = new();
+            foreach (long? id in ids.Distinct())
+            {
+                if (groups != null)
+                {
+                    matches.AddRange(groups[id]);
+                }
+                else if (id.HasValue && snapshot.TryGetValue(id.Value, out BlueprintEntity? entity))
+                {
+                    matches.Add(entity);
+                }
+            }
+            return matches.Count < 2 ? matches : matches.OrderBy(entity => positions[entity.ID]).ToArray();
+        }
+
+        /// <summary>Returns one immutable group from the same per-snapshot index used for relationship loading.</summary>
+        /// <param name="foreignKey">The mapped dependent key.</param>
+        /// <param name="id">The requested parent ID, including null for unassigned rows.</param>
+        /// <returns>The matching rows in snapshot order, or an empty group when no rows match.</returns>
+        internal IEnumerable<BlueprintEntity> GetForeignKeyRows(IProperty foreignKey, long? id)
+        {
+            lock (fSyncRoot)
+            {
+                return GetOrCreateForeignKeyIndex(foreignKey)[id];
+            }
+        }
+
+        /// <summary>Builds the index once for the current snapshot. The caller holds the table lock.</summary>
+        /// <param name="foreignKey">The mapped foreign key to index.</param>
+        /// <returns>Groups of dependent rows in snapshot order, keyed by their stored foreign-key value.</returns>
+        private ILookup<object?, BlueprintEntity> GetOrCreateForeignKeyIndex(IProperty foreignKey)
+        {
+            if (!fForeignKeyIndexes.TryGetValue(foreignKey.Name, out ILookup<object?, BlueprintEntity>? index))
             {
                 index = fRows.Values.ToLookup(row => foreignKey.PropertyInfo!.GetValue(row));
-                fForeignKeyIndexes.Add(foreignKey, index);
+                fForeignKeyIndexes.Add(foreignKey.Name, index);
             }
-            return index[id];
+            return index;
         }
 
         /// <summary>Uses the EF Core materializer to read CLR types and physical columns correctly.</summary>
@@ -191,6 +247,14 @@ namespace Blueprint.Database.Sql.RAMCache
         private static List<BlueprintEntity> ReadRows<TEntity>(BlueprintDatabaseContext context, string sql, object[] parameters) where TEntity : BlueprintEntity
         {
             return context.Set<TEntity>().FromSqlRaw(sql, parameters).AsNoTracking().ToList().Cast<BlueprintEntity>().ToList();
+        }
+
+        /// <summary>Finds a mapped long primary key or single-column foreign key by its entity property name.</summary>
+        /// <param name="name">The property referenced by the filter on the public entity contract.</param>
+        /// <returns>The mapped key, or null if that property has no supported lookup.</returns>
+        internal IProperty? getLookupKey(string name)
+        {
+            return fLookupKeys.GetValueOrDefault(name);
         }
 
         /// <summary>The generated CLR type of the stored entities.</summary>

@@ -15,11 +15,11 @@ For a complete initialization example, see [SQL Server](Database-SqlDatabase.md#
 
 ## Configuration
 
-The protected base constructor receives a database name, a connection string, and a `List<BlueprintLanguage>`. It validates and stores the settings, captures an independent language configuration, and creates the instance's transaction factory. The base constructor does not open a database connection. The concrete provider initializes and activates the database before applications use the Entity API.
+The protected base constructor receives a database name, a connection string, a `List<BlueprintLanguage>`, and an optional `int poolSize = 10`. The pool size sets the number of EF Core contexts for this instance. Values below 1 throw `ArgumentOutOfRangeException`. The base constructor validates and stores the settings, captures an independent language configuration, and creates the instance's transaction factory. The base constructor does not open a database connection. The concrete provider initializes and activates the database before applications use the Entity API.
 
 The language list must be nonempty, with unique IDs and case-insensitively unique prefixes. Exactly one language must have an empty prefix; that language is the default. Changing the original list after construction does not reconfigure the database. See [Multilingual Entities](Entitites-MultilingualEntities.md) for the full language rules and translation behavior.
 
-The database name, connection settings, and language configuration are read-only after construction. To change them, finish existing work, dispose the database, and initialize a new instance with the required configuration.
+The database name, connection settings, languages, and pool size are fixed at construction. To change them, finish existing work, dispose the database, and initialize a new instance with the required configuration.
 
 ## Properties
 
@@ -43,11 +43,11 @@ using (BlueprintDatabaseContext context = BlueprintDatabase.ACTIVE_INSTANCE.GetC
 }
 ```
 
-`ACTIVE_INSTANCE` returns the instance registered by the base constructor without checking for null. Access it only after initialization and before disposal. `GetContext()` replaces the former `Context` property. Each database has five contexts; the method reserves a free entry under the pool lock and waits if all five are in use.
+`ACTIVE_INSTANCE` returns the instance registered by the base constructor without checking for null. Access it only after initialization and before disposal. `GetContext()` replaces the former `Context` property. It reserves a free entry under the pool lock and waits if all `poolSize` contexts are in use.
 
 `Dispose()` and `DisposeAsync()` call `ReleaseContext(context)`, which clears tracking, disposes any remaining transaction, restores the default query language, and marks the entry free under the same lock. Waiting callers are then notified. Complete all work and enumeration before disposal, do not share a reserved context between threads, and do not use or dispose a reference again after returning it. Finish any manually opened connection and restore any EF settings you change before returning the context.
 
-Queries, transactions, and cache refreshes use this same pool. Independent Entity operations execute concurrently on separate contexts. A thread-local value keeps nested synchronous Entity calls and transaction callbacks on their operation's reserved context; it is cleared when the operation ends. Do not use asynchronous callbacks or move transaction work to another thread. Cache refreshes and snapshot indexes have separate synchronization. Return every context before registering entities or disposing the database. Database disposal permanently closes all five contexts.
+Queries, transactions, and cache refreshes use this same pool. Independent Entity operations execute concurrently on separate contexts. A thread-local value keeps nested synchronous Entity calls and transaction callbacks on their operation's reserved context; it is cleared when the operation ends. Do not use asynchronous callbacks or move transaction work to another thread. Cache refreshes and snapshot indexes have separate synchronization. Return every context before registering entities or disposing the database. Rebuilding the entity model preserves the configured pool size. Database disposal permanently closes all contexts in the pool.
 
 ### Name
 

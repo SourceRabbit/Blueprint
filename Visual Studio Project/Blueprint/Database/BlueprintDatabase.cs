@@ -14,37 +14,38 @@ namespace Blueprint.Database
     /// <summary>Manages entity contracts, languages, and the active database used by the Entity API.</summary>
     public abstract class BlueprintDatabase : IDisposable
     {
-        // CONTEXT_POOL_SIZE will turn into a variable later....
-        private const int CONTEXT_POOL_SIZE = 10;
-
         // Initialization completes before consumer threads start; disposal runs after they have all stopped.
         private static volatile BlueprintDatabase? fActiveInstance;
         private readonly string fName;
         private readonly string fConnectionString;
-        private readonly HashSet<Type> fEntityTypes = new();
-        private readonly object fContextPoolLock = new();
-        private (BlueprintDatabaseContext? Context, bool IsAvailable)[] fContextPool = new (BlueprintDatabaseContext?, bool)[CONTEXT_POOL_SIZE];
-        private readonly ThreadLocal<BlueprintDatabaseContext?> fExecutingContext = new();
+        private readonly HashSet<Type> fEntityTypes = new HashSet<Type>();
+        private readonly object fContextPoolLock = new object();
+        private readonly int fPoolSize;
+        private (BlueprintDatabaseContext? Context, bool IsAvailable)[] fContextPool;
+        private readonly ThreadLocal<BlueprintDatabaseContext?> fExecutingContext = new ThreadLocal<BlueprintDatabaseContext?>();
         private bool fModelChanged = true;
         private readonly IReadOnlyList<BlueprintLanguage> fLanguages;
         private readonly DatabaseTransactionFactory fTransactionFactory;
         private TimeSpan fRAMCacheRefreshInterval = TimeSpan.FromSeconds(1);
         private protected SqlEntityCache? fRAMCache;
-        protected readonly object fSyncRoot = new();
+        protected readonly object fSyncRoot = new object();
         protected bool fIsDisposed;
 
         /// <summary>Stores validated settings and registers this instance as active without opening a connection.</summary>
         /// <param name="name">The database name.</param>
         /// <param name="connectionString">The connection settings.</param>
         /// <param name="languages">The model languages, with unique IDs and prefixes and exactly one language with an empty Prefix.</param>
+        /// <param name="poolSize">The number of EF Core contexts in this database's pool. Defaults to 10.</param>
         /// <remarks>The active instance is available during provider initialization. Each provider must dispose it if its constructor fails. Complete initialization before starting consumer threads. Dispose the active database before creating another.</remarks>
         /// <exception cref="ArgumentNullException">No language list was provided.</exception>
         /// <exception cref="ArgumentException">The settings or languages are invalid.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">The pool size is less than one.</exception>
         /// <exception cref="InvalidOperationException">Another database is active.</exception>
-        protected BlueprintDatabase(string name, string connectionString, List<BlueprintLanguage> languages)
+        protected BlueprintDatabase(string name, string connectionString, List<BlueprintLanguage> languages, int poolSize = 10)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(name);
             ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(poolSize);
             fName = name;
             fConnectionString = connectionString;
             fLanguages = LanguageColumns.ValidateLanguages(languages).AsReadOnly();
@@ -52,6 +53,8 @@ namespace Blueprint.Database
             {
                 throw new InvalidOperationException("Another Blueprint database is active. Dispose it before creating another database.");
             }
+            fPoolSize = poolSize;
+            fContextPool = new (BlueprintDatabaseContext?, bool)[fPoolSize];
             fActiveInstance = this;
          
             fTransactionFactory = new DatabaseTransactionFactory();
@@ -207,7 +210,7 @@ namespace Blueprint.Database
             }
         }
 
-        /// <summary>Reserves a free context, waiting when all five pool entries are in use.</summary>
+        /// <summary>Reserves a free context, waiting when all pool entries are in use.</summary>
         /// <returns>A context exclusively owned by the caller until Dispose or DisposeAsync returns it to the pool.</returns>
         /// <exception cref="ObjectDisposedException">The database has been disposed.</exception>
         /// <exception cref="InvalidOperationException">The pool has not been initialized.</exception>
@@ -300,7 +303,7 @@ namespace Blueprint.Database
             return context.EntityTypes.Types.TryGetValue(typeof(TEntity), out Type? type) ? type : throw new InvalidOperationException($"Entity '{typeof(TEntity)}' is not registered. Call RegisterEntity() first.");
         }
 
-        /// <summary>Initializes the schema and publishes five contexts sharing the same entity model.</summary>
+        /// <summary>Initializes the schema and publishes a pool of the configured size sharing the same entity model.</summary>
         /// <param name="options">The provider settings.</param>
         /// <param name="initialize">The schema and cache initialization operation.</param>
         /// <exception cref="InvalidOperationException">A context is still reserved during initialization.</exception>
@@ -323,7 +326,7 @@ namespace Blueprint.Database
                     }
                     options.ReplaceService<IModelCacheKeyFactory, EntityModelCacheKey>();
                     BlueprintEntityTypes entityTypes = new BlueprintEntityTypes(fEntityTypes, fLanguages);
-                    (BlueprintDatabaseContext? Context, bool IsAvailable)[] candidates = new (BlueprintDatabaseContext?, bool)[CONTEXT_POOL_SIZE];
+                    (BlueprintDatabaseContext? Context, bool IsAvailable)[] candidates = new (BlueprintDatabaseContext?, bool)[fPoolSize];
                     try
                     {
                         for (int index = 0; index < candidates.Length; index++)

@@ -29,6 +29,10 @@ var productName = "Camera";
 var productNames = new List<string>();
 ```
 
+## Explicit types in constructor calls
+
+Always write the type name after `new` in C# constructor calls, even when the compiler can infer it. This applies to fields and local variables as well as constructor calls with arguments. For example, write `new object()` and `new List<string>()`. Avoid the target-typed forms `new()` and `new(...)`.
+
 ## Braces and statement formatting
 
 Use **Allman / BSD brace style**. Put the opening brace on the next line after the declaration or statement. Put the closing brace on its own line, aligned with the start of that declaration or statement.

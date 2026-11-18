@@ -31,6 +31,7 @@ namespace Blueprint.Tests.RAMCache
                 using SqlConnection writer = new SqlConnection(settings.ConnectionString);
                 writer.Open();
                 CheckIncludes(database, writer);
+                CheckParentProductLookup(database, writer);
             }
             finally
             {
@@ -142,6 +143,68 @@ namespace Blueprint.Tests.RAMCache
             WaitForRefresh(database, () => IncludedOption.SingleOrDefault(option => option.ID == 3)!.Product?.ID == 3);
         }
 
+        /// <summary>Checks variant selection, ordering, paging and index invalidation for a nullable self-referencing key.</summary>
+        /// <param name="database">The isolated database holding the RAM snapshot.</param>
+        /// <param name="writer">The independent connection used to reassign and remove variants.</param>
+        /// <exception cref="Exception">A query, refresh or assertion failed.</exception>
+        private void CheckParentProductLookup(BlueprintDatabase database, SqlConnection writer)
+        {
+            long? parentID = 1;
+            IQueryable<IncludedProduct> variants = IncludedProduct.Where(product => product.ParentProductID == parentID && product.BrandID == 1);
+            Assert(!variants.Any(), "A parent without variants must have an empty group.");
+            ExecuteSql(writer, "UPDATE dbo.IncludeProducts SET ParentProductID = 1 WHERE ID IN (2, 3);");
+            WaitForRefresh(database, () => variants.Count() == 2);
+            Assert(variants.OrderByDescending(product => product.ID).Select(product => product.ID).ToArray().SequenceEqual(new long[] { 3, 2 }), "All matching variants must survive ordering and projection.");
+            Assert(variants.OrderBy(product => product.ID).Skip(1).Take(1).Single().ID == 3, "Paging must apply within the selected parent group.");
+            Assert(IncludedProduct.Where(product => parentID == product.ParentProductID && product.ID > 2).Single().ID == 3, "Reversed equality and residual filters must select only the requested variant.");
+            Assert(IncludedProduct.Where(product => product.ParentProductID == parentID && product.ID == 1).SingleOrDefault() == null, "A primary-key hit must still satisfy the foreign-key filter.");
+            Assert(IncludedProduct.Where(product => product.ParentProductID == parentID || product.ID == 1).Count() == 3, "Disjunction must preserve rows outside the parent group.");
+            Assert(!IncludedProduct.Where(product => true).OrderBy(product => product.ID).Take(1).Where(product => product.ParentProductID == parentID).Any(), "A later parent filter must not change the input to paging.");
+            parentID = null;
+            Assert(variants.Single().ID == 1, "Null must match only rows without a parent.");
+            parentID = 2;
+            Assert(!variants.Any(), "Re-enumeration must use the current captured parent ID.");
+
+            ExecuteSql(writer, "UPDATE dbo.IncludeProducts SET ParentProductID = 2 WHERE ID = 3;");
+            Assert(!variants.Any(), "An unrefreshed index must continue to use its original snapshot.");
+            WaitForRefresh(database, () => variants.Select(product => product.ID).SingleOrDefault() == 3);
+            parentID = 1;
+            Assert(variants.Single().ID == 2, "A reassigned variant must leave its previous parent's group.");
+            CheckKeyMembership();
+            ExecuteSql(writer, "INSERT dbo.IncludeProducts (ID, Title, BrandID, ParentProductID) VALUES (4, N'Variant', 1, 1);");
+            WaitForRefresh(database, () => variants.Count() == 2);
+            ExecuteSql(writer, "DELETE FROM dbo.IncludeProducts WHERE ID = 4;");
+            WaitForRefresh(database, () => variants.Count() == 1);
+            Assert(variants.Single().ID == 2, "A deleted variant must leave the index after synchronization.");
+        }
+
+        /// <summary>Checks membership against snapshot order, nullable parents, current inputs and custom comparison semantics.</summary>
+        /// <exception cref="Exception">A membership query changed the expected result or exception.</exception>
+        private void CheckKeyMembership()
+        {
+            long[] order = IncludedProduct.Where(product => true).Select(product => product.ID).ToArray();
+            long[] ids = { 3, 2, 99, 2, 1 };
+            IQueryable<IncludedProduct> selected = IncludedProduct.Where(product => ids.Contains(product.ID) && product.ID > 1);
+            long[] expected = order.Where(id => id > 1).ToArray();
+            Assert(selected.Select(product => product.ID).ToArray().SequenceEqual(expected), "Repeated, missing and reversed IDs must preserve snapshot order and residual filters.");
+            Assert(selected.OrderBy(product => product.BrandID).Skip(1).First().ID == expected[1], "Ties and paging must preserve the original source order.");
+            ids = Array.Empty<long>();
+            Assert(!selected.Any(), "Re-enumeration must observe an empty replacement array.");
+            ids = new long[] { 1, 3 };
+            Assert(selected.Single().ID == 3, "Re-enumeration must bind the new IDs and retain all filters.");
+
+            HashSet<long> parents = new() { 2, 1 };
+            IQueryable<IncludedProduct> variants = IncludedProduct.Where(product => product.ParentProductID.HasValue && parents.Contains(product.ParentProductID.Value));
+            Assert(variants.Select(product => new ValueTuple<long, long?>(product.ID, product.ParentProductID)).ToArray().Select(pair => pair.Item1).SequenceEqual(expected), "Several parent groups must merge in snapshot order through a tuple projection.");
+            parents.Remove(1);
+            Assert(variants.Single().ID == 3, "A reused query must observe a mutated set of parents.");
+            List<long?> nullableParents = new() { 2, null, 2 };
+            Assert(IncludedProduct.Where(product => nullableParents.Contains(product.ParentProductID)).Select(product => product.ID).ToArray().SequenceEqual(order.Where(id => id != 2)), "Direct nullable membership must include the null group once.");
+            AssertThrows<InvalidOperationException>(() => IncludedProduct.Where(product => parents.Contains(product.ParentProductID!.Value)).Count(), "An unguarded nullable access must retain its exception.");
+            HashSet<long> custom = new(EqualityComparer<long>.Create((left, right) => left % 2 == right % 2, value => (int)(value % 2))) { 1 };
+            Assert(IncludedProduct.Where(product => custom.Contains(product.ID)).Count() == 2, "A custom comparer must preserve its own membership semantics.");
+        }
+
         /// <summary>Περιμένει πραγματικό refresh με μικρό διάστημα και ελέγχει κατόπιν με μεγάλο διάστημα χωρίς query-triggered refresh.</summary>
         /// <param name="database">Η βάση που διαχειρίζεται τον timer.</param>
         /// <param name="condition">Η αναμενόμενη κατάσταση μετά τον συγχρονισμό.</param>
@@ -188,6 +251,10 @@ namespace Blueprint.Tests.RAMCache
     {
         [Multilingual]
         public abstract string? Title { get; set; }
+        public abstract long? ParentProductID { get; set; }
+        [ForeignKey(nameof(ParentProductID))]
+        public abstract IncludedProduct? ParentProduct { get; set; }
+
         public abstract long? VatCategoryID { get; set; }
         [ForeignKey(nameof(VatCategoryID)), AutoInclude]
         public abstract IncludedVatCategory? VatCategory { get; set; }
