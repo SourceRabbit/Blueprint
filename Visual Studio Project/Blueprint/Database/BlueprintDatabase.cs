@@ -14,6 +14,7 @@ namespace Blueprint.Database
     /// <summary>Manages entity contracts, languages, and the active database used by the Entity API.</summary>
     public abstract class BlueprintDatabase : IDisposable
     {
+        // Initialization completes before consumer threads start; disposal runs after they have all stopped.
         private static volatile BlueprintDatabase? fActiveInstance;
         private readonly string fName;
         private readonly string fConnectionString;
@@ -27,11 +28,11 @@ namespace Blueprint.Database
         protected readonly object fSyncRoot = new();
         protected bool fIsDisposed;
 
-        /// <summary>Stores database settings and an independent, validated language snapshot without opening a connection.</summary>
+        /// <summary>Stores validated settings and registers this instance as active without opening a connection.</summary>
         /// <param name="name">The database name.</param>
         /// <param name="connectionString">The connection settings.</param>
         /// <param name="languages">The model languages, with unique IDs and prefixes and exactly one language with an empty Prefix.</param>
-        /// <remarks>Each provider initializes and activates the database in its own constructor. Dispose the active database before creating another. Entities are then added through RegisterEntity.</remarks>
+        /// <remarks>The active instance is available during provider initialization. Each provider must dispose it if its constructor fails. Complete initialization before starting consumer threads. Dispose the active database before creating another.</remarks>
         /// <exception cref="ArgumentNullException">No language list was provided.</exception>
         /// <exception cref="ArgumentException">The settings or languages are invalid.</exception>
         /// <exception cref="InvalidOperationException">Another database is active.</exception>
@@ -46,6 +47,8 @@ namespace Blueprint.Database
             {
                 throw new InvalidOperationException("Another Blueprint database is active. Dispose it before creating another database.");
             }
+            fActiveInstance = this;
+         
             fTransactionFactory = new DatabaseTransactionFactory();
         }
 
@@ -220,10 +223,10 @@ namespace Blueprint.Database
             return context.EntityTypes.Types.TryGetValue(typeof(TEntity), out Type? type) ? type : throw new InvalidOperationException($"Entity '{typeof(TEntity)}' is not registered. Call RegisterEntity() first.");
         }
 
-        /// <summary>Builds the model and activates the database only after successful schema initialization.</summary>
+        /// <summary>Builds the model and replaces the context only after successful schema initialization.</summary>
         /// <param name="options">The provider settings.</param>
         /// <param name="initialize">The database initialization operation.</param>
-        /// <exception cref="InvalidOperationException">The model is being changed within a transaction or another database is active.</exception>
+        /// <exception cref="InvalidOperationException">The model is being changed within a transaction.</exception>
         protected void InitializeContext(DbContextOptionsBuilder options, Action<DbContext> initialize)
         {
             lock (fSyncRoot)
@@ -246,15 +249,6 @@ namespace Blueprint.Database
                     initialize(candidate);
                     fContext?.Dispose();
                     fContext = candidate;
-                    // Interlocked supplies the synchronization guarantees when the volatile field is passed by reference.
-#pragma warning disable CS0420
-                    BlueprintDatabase? activeDatabase = Interlocked.CompareExchange(ref fActiveInstance, this, null);
-#pragma warning restore CS0420
-                    if (activeDatabase != null && !ReferenceEquals(activeDatabase, this))
-                    {
-                        fContext = null;
-                        throw new InvalidOperationException("Another Blueprint database is active. Dispose it before creating another database.");
-                    }
                     fModelChanged = false;
                 }
                 catch
@@ -289,21 +283,18 @@ namespace Blueprint.Database
                 }
                 finally
                 {
-                    // Interlocked atomically clears only this instance and supplies the required memory ordering.
-#pragma warning disable CS0420
                     Interlocked.CompareExchange(ref fActiveInstance, null, this);
-#pragma warning restore CS0420
                 }
             }
         }
 
-        /// <summary>The successfully initialized database shared by static Entity API calls.</summary>
-        /// <exception cref="InvalidOperationException">No initialized database is active.</exception>
+        /// <summary>The database registered by the base constructor, shared by static Entity API calls after provider initialization completes.</summary>
+        /// <remarks>Callers must complete initialization before use and stop before disposal. No runtime null check is performed.</remarks>
         internal static BlueprintDatabase ACTIVE_INSTANCE
         {
             get
             {
-                return fActiveInstance ?? throw new InvalidOperationException("No active Blueprint database exists. Create an initialized database first.");
+                return fActiveInstance!;
             }
         }
 

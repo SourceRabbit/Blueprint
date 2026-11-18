@@ -57,8 +57,8 @@ namespace Blueprint.Tests.Queries
                 Assert(deferred.ToQueryString() == priceSql, "A deferred query must resolve the current context after registering another entity.");
                 Assert(translated.ToQueryString().Contains("[TitleFR]"), "Recreated contexts must preserve the language of existing queries.");
             }
-            AssertThrows<InvalidOperationException>(() => deferred.ToList(), "Deferred queries must reject a missing active database.");
-            AssertThrows<InvalidOperationException>(() => ((System.Collections.IEnumerable)deferred).GetEnumerator(), "Non-generic enumeration must reject a missing active database.");
+            AssertThrows<NullReferenceException>(() => deferred.ToList(), "Deferred queries must reject a missing active database.");
+            AssertThrows<NullReferenceException>(() => ((System.Collections.IEnumerable)deferred).GetEnumerator(), "Non-generic enumeration must reject a missing active database.");
             using (QueryModelDatabase replacement = new QueryModelDatabase())
             {
                 replacement.RegisterEntity<ExecutorProduct>();

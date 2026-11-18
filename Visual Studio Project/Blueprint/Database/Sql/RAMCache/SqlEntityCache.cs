@@ -125,12 +125,8 @@ namespace Blueprint.Database.Sql.RAMCache
             }
             try
             {
-                BlueprintDatabase database;
-                try
-                {
-                    database = BlueprintDatabase.ACTIVE_INSTANCE;
-                }
-                catch (InvalidOperationException)
+                BlueprintDatabase? database = BlueprintDatabase.ACTIVE_INSTANCE;
+                if (database == null)
                 {
                     // Disposal may clear the active instance before an already queued callback starts.
                     return;

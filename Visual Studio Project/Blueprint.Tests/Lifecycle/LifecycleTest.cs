@@ -47,9 +47,9 @@ namespace Blueprint.Tests.Lifecycle
         /// <exception cref="Exception">Αποτυγχάνει έλεγχος κύκλου ζωής.</exception>
         private void CheckDatabaseLifecycle()
         {
-            AssertThrows<InvalidOperationException>(() => LifecycleRecord.Create(), "Entity calls must reject a missing active database.");
+            Assert(typeof(BlueprintDatabase).GetProperty("ACTIVE_INSTANCE", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null) == null, "The active instance must be null before construction.");
             AssertThrows<InvalidOperationException>(() => new ModelDatabase(CreateLanguages(), true), "Failed initialization must propagate its error.");
-            AssertThrows<InvalidOperationException>(() => LifecycleRecord.Create(), "Failed initialization must not publish a database.");
+            Assert(typeof(BlueprintDatabase).GetProperty("ACTIVE_INSTANCE", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null) == null, "Failed initialization must clear the active instance.");
             List<BlueprintLanguage> languages = CreateLanguages();
             ModelDatabase previousDatabase;
             IQueryable<LifecycleRecord> previousQuery;
@@ -81,8 +81,8 @@ namespace Blueprint.Tests.Lifecycle
                     Assert(LifecycleRecord.Create().CurrentLanguage == 7, "Stopping an independent manager must not dispose the database.");
                 }
             }
-            AssertThrows<InvalidOperationException>(() => LifecycleRecord.Create(), "Disposal must clear the active database.");
-            AssertThrows<InvalidOperationException>(() => previousQuery.ToList(), "Deferred queries must reject a missing active database.");
+            Assert(typeof(BlueprintDatabase).GetProperty("ACTIVE_INSTANCE", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null) == null, "Disposal must clear the active instance.");
+            AssertThrows<NullReferenceException>(() => previousQuery.ToList(), "Deferred queries must reject a missing active database.");
             using (ModelDatabase database = new ModelDatabase(CreateLanguages()))
             {
                 database.RegisterEntity<LifecycleRecord>();
@@ -138,8 +138,8 @@ namespace Blueprint.Tests.Lifecycle
                     Assert(queued.IsCompleted && !queued.IsCommitted, "The queued cancelled transaction must publish its completion.");
                 }
             }
-            AssertThrows<InvalidOperationException>(() => factory.CreateNewTransaction(), "The factory must reject a missing active database after disposal.");
-            AssertThrows<InvalidOperationException>(() => factory.ExecuteTransactionAsync(new DatabaseTransaction()), "Submitting after disposal must reject a missing active database.");
+            AssertThrows<NullReferenceException>(() => factory.CreateNewTransaction(), "The factory must reject a missing active database after disposal.");
+            AssertThrows<NullReferenceException>(() => factory.ExecuteTransactionAsync(new DatabaseTransaction()), "Submitting after disposal must reject a missing active database.");
         }
 
         /// <summary>Ελέγχει ότι το disposal περιμένει το κοινό lock και ότι οι επόμενες λειτουργίες απορρίπτονται.</summary>
@@ -177,7 +177,7 @@ namespace Blueprint.Tests.Lifecycle
                     Assert(operation.Wait(TimeSpan.FromSeconds(5)), "The database operation must finish after release.");
                     Assert(disposal == null || disposal.Wait(TimeSpan.FromSeconds(5)), "Database disposal must finish after release.");
                 }
-                AssertThrows<InvalidOperationException>(() => database.TransactionFactory.CreateNewTransaction(), "Disposed databases must leave no active instance for transactions.");
+                AssertThrows<NullReferenceException>(() => database.TransactionFactory.CreateNewTransaction(), "Disposed databases must leave no active instance for transactions.");
             }
         }
 
@@ -199,7 +199,7 @@ namespace Blueprint.Tests.Lifecycle
                 Assert(database.TransactionFactory.CreateNewTransaction() != null, "A callback from a disposed cache must preserve the active database.");
             }
             refresh.Invoke(cache, new object?[] { null });
-            AssertThrows<InvalidOperationException>(() => LifecycleRecord.Create(), "A callback after database disposal must leave the active instance empty.");
+            Assert(typeof(BlueprintDatabase).GetProperty("ACTIVE_INSTANCE", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null) == null, "A callback after database disposal must leave the active instance empty.");
         }
 
         /// <summary>Επαληθεύει ότι η ταυτόχρονη αρχικοποίηση ενεργοποιεί ακριβώς μία βάση.</summary>
@@ -231,11 +231,16 @@ namespace Blueprint.Tests.Lifecycle
         /// <summary>Δοκιμάζει συγχρονισμένη αρχικοποίηση, επιτρέποντας την απόρριψη δεύτερης ενεργής βάσης.</summary>
         /// <param name="barrier">Το σημείο συγχρονισμού πριν ενεργοποιηθεί οποιαδήποτε βάση.</param>
         /// <returns>Η βάση που ενεργοποιήθηκε ή null αν προηγήθηκε άλλος constructor.</returns>
+        /// <exception cref="TimeoutException">Οι ταυτόχρονοι constructors δεν φτάνουν στο σημείο συγχρονισμού.</exception>
         private static ModelDatabase? TryCreateDatabase(Barrier barrier)
         {
+            if (!barrier.SignalAndWait(TimeSpan.FromSeconds(5)))
+            {
+                throw new TimeoutException("Concurrent database construction did not reach the rendezvous.");
+            }
             try
             {
-                return new ModelDatabase(CreateLanguages(), barrier: barrier);
+                return new ModelDatabase(CreateLanguages());
             }
             catch (InvalidOperationException)
             {
@@ -377,19 +382,21 @@ namespace Blueprint.Tests.Lifecycle
         private sealed class ModelDatabase : BlueprintDatabase
         {
             private readonly bool fFailInitialization;
-            private readonly Barrier? fBarrier;
 
-            /// <summary>Αρχικοποιεί τον provider, με προαιρετική αποτυχία ή συγχρονισμό ταυτόχρονης κατασκευής.</summary>
+            /// <summary>Ελέγχει την ενεργοποίηση από τον base constructor και αρχικοποιεί τον provider με προαιρετική αποτυχία.</summary>
             /// <param name="languages">Οι γλώσσες που αντιγράφονται στη βάση.</param>
             /// <param name="failInitialization">Αν πρέπει να αποτύχει η αρχικοποίηση του schema.</param>
-            /// <param name="barrier">Προαιρετικό σημείο συγχρονισμού πριν την ενεργοποίηση.</param>
             /// <exception cref="Exception">Αποτυγχάνει η αρχικοποίηση του provider ή η ταυτόχρονη ενεργοποίηση.</exception>
-            public ModelDatabase(List<BlueprintLanguage> languages, bool failInitialization = false, Barrier? barrier = null) : base("LifecycleModel", "Server=unused;Database=LifecycleModel", languages)
+            public ModelDatabase(List<BlueprintLanguage> languages, bool failInitialization = false) : base("LifecycleModel", "Server=unused;Database=LifecycleModel", languages)
             {
                 fFailInitialization = failInitialization;
-                fBarrier = barrier;
                 try
                 {
+                    object? activeDatabase = typeof(BlueprintDatabase).GetProperty("ACTIVE_INSTANCE", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null);
+                    if (!ReferenceEquals(activeDatabase, this))
+                    {
+                        throw new InvalidOperationException("The base constructor must activate this instance before provider initialization.");
+                    }
                     SynchronizeEntities();
                 }
                 catch
@@ -423,7 +430,6 @@ namespace Blueprint.Tests.Lifecycle
 
             /// <summary>Κατασκευάζει το μοντέλο entities και προσομοιώνει επιτυχία ή αποτυχία χωρίς πρόσβαση σε SQL Server.</summary>
             /// <exception cref="InvalidOperationException">Αποτυγχάνει η προσομοιωμένη αρχικοποίηση.</exception>
-            /// <exception cref="TimeoutException">Οι ταυτόχρονοι constructors δεν φτάνουν στο σημείο συγχρονισμού.</exception>
             protected override void SynchronizeEntities()
             {
                 InitializeContext(new DbContextOptionsBuilder().UseSqlServer(ConnectionString), context =>
@@ -431,10 +437,6 @@ namespace Blueprint.Tests.Lifecycle
                     if (fFailInitialization)
                     {
                         throw new InvalidOperationException("Simulated provider failure.");
-                    }
-                    if (fBarrier != null && fBarrier.CurrentPhaseNumber == 0 && !fBarrier.SignalAndWait(TimeSpan.FromSeconds(5)))
-                    {
-                        throw new TimeoutException("Concurrent database construction did not reach the rendezvous.");
                     }
                 });
             }
