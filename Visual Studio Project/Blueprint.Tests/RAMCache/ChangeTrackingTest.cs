@@ -82,6 +82,7 @@ namespace Blueprint.Tests.RAMCache
             deleted.Price = 20m;
             CachedRecord.Insert(new[] { updated, deleted });
             Assert(query.Count() == 2, "Blueprint inserts must invalidate the cache for the next read.");
+            CheckPageArguments(updated.ID, deleted.ID);
             CachedRecord retained = query.Single(item => item.ID == updated.ID);
 
             Assert(ExecuteSql(writer, "UPDATE dbo.RAMCachedRecords SET Price = 15, TitleEN = N'Updated EN' WHERE ID = @id;", new SqlParameter("@id", updated.ID)) == 1, "The external SQL update must affect the intended row.");
@@ -127,6 +128,43 @@ namespace Blueprint.Tests.RAMCache
             Assert(CachedRecord.Update(copy) == 1, "The Entity API update must persist the edited copy.");
             Assert(query.Single(item => item.ID == insertedID).Price == 40m, "Blueprint updates must invalidate the cache even when the refresh interval is one hour.");
             Console.WriteLine("PASS: independent copies and immediate invalidation after Blueprint writes.");
+        }
+
+        /// <summary>Checks that repeated page shapes take their arguments from the current execution, including concurrent callers.</summary>
+        /// <param name="firstID">The ID of the record priced at ten with both translations populated.</param>
+        /// <param name="secondID">The ID of the record priced at twenty.</param>
+        private void CheckPageArguments(long firstID, long secondID)
+        {
+            long[] ids = { firstID };
+            decimal minimum = 10m;
+            IQueryable<CachedRecord> query = CachedRecord.Where(record => ids.Contains(record.ID) && record.Price >= minimum);
+            Assert(query.Single().ID == firstID, "The first execution must bind the original ID.");
+            ids = new[] { secondID };
+            minimum = 20m;
+            Assert(query.Single().ID == secondID, "Re-enumeration must observe the new collection and threshold.");
+            minimum = 21m;
+            Assert(query.ToArray().Length == 0, "A changed threshold must be applied on a cache hit.");
+
+            for (int index = 0; index < 4; index++)
+            {
+                int skip = index % 2;
+                int take = index == 3 ? 0 : 1;
+                long[] actual = CachedRecord.Where(record => true).OrderBy(record => record.ID).Skip(skip).Take(take).ToArray().Select(record => record.ID).ToArray();
+                long[] expected = new[] { firstID, secondID }.Order().Skip(skip).Take(take).ToArray();
+                Assert(actual.SequenceEqual(expected), "Skip and Take must use the current page bounds.");
+
+                long language = skip + 1;
+                string title = skip == 0 ? "Original" : "Original EN";
+                Assert(CachedRecord.Where(record => record.Title == title, language).Single().ID == firstID, "The plan must read the mapped column of the selected language.");
+            }
+
+            long[] results = new long[32];
+            Parallel.For(0, results.Length, new ParallelOptions { MaxDegreeOfParallelism = 6 }, index =>
+            {
+                long id = index % 2 == 0 ? firstID : secondID;
+                results[index] = CachedRecord.Where(record => record.ID == id).Single().ID;
+            });
+            Assert(results.Select((id, index) => id == (index % 2 == 0 ? firstID : secondID)).All(matches => matches), "Concurrent selections must use independent arguments.");
         }
 
         /// <summary>Δίνει χρόνο στον timer και ελέγχει τη RAM με μεγάλο interval, ώστε η ανάγνωση να μην προκαλεί refresh λόγω ηλικίας.</summary>

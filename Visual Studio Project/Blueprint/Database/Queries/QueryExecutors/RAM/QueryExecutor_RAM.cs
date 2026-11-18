@@ -302,6 +302,11 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
             {
                 return false;
             }
+            if (operations.Count == 0)
+            {
+                page = static currentRows => currentRows;
+                return true;
+            }
             CachedReadExpression visitor = new CachedReadExpression(fContract, table.ConcreteType, table.Properties, fLanguage, defaultLanguage);
             ParameterExpression rows = Expression.Parameter(typeof(IEnumerable<BlueprintEntity>), "rows");
             Expression source = rows;
@@ -352,7 +357,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
                         return false;
                 }
             }
-            page = Expression.Lambda<Func<IEnumerable<BlueprintEntity>, IEnumerable<BlueprintEntity>>>(source, rows).Compile();
+            page = CachedPagePlans.Bind(table, rows, source);
             return true;
         }
 
