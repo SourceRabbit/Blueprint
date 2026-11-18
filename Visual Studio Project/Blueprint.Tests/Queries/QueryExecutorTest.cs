@@ -135,6 +135,9 @@ namespace Blueprint.Tests.Queries
                 }
                 Assert(firstContextCleared && secondContextCleared, "Each operation must clear its thread's context before returning.");
                 Assert(first.Result.Contains("QueryExecutorProducts") && second!.Result.Contains("QueryExecutorProducts"), "Both Entity queries must produce SQL for the expected table.");
+                Func<decimal> failingPrice = () => throw new InvalidOperationException("Expected parameter evaluation failure.");
+                AssertThrows<InvalidOperationException>(() => ExecutorProduct.Where(product => product.Price == failingPrice()).ToQueryString(), "A failed query must propagate its parameter evaluation error.");
+                Assert(executingContext.Value == null, "A failed operation must also clear its thread's context.");
                 Console.WriteLine("Entity API concurrency check: the second query completed while the first was blocked, using a different context.");
             }
         }
