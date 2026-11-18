@@ -6,7 +6,7 @@ This manual describes the consumer API available in this repository. Examples ta
 
 ## Getting Started
 
-- [Getting Started](GettingStarted.md): add Blueprint to your project using a project or DLL reference and configure its dependencies.
+- [Getting Started](GettingStarted.md): install Blueprint from NuGet or use the DLL and PDB from the latest GitHub release.
 
 ## Entities
 
