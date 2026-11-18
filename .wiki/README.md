@@ -13,7 +13,7 @@ This manual describes the consumer API available in this repository. Examples ta
 - [BlueprintEntity](Database-Entities-BlueprintEntity.md): the shared entity base class, inherited properties, and common Entity API.
   - [BlueprintEntityDB](Database-Entities-BlueprintEntity.md#blueprintentitydb): entities that read from and persist to SQL.
   - [BlueprintEntityRAM](Database-Entities-BlueprintEntity.md#blueprintentityram): SQL-persisted entities with RAM reads and Change Tracking synchronization.
-- [Data Annotations](Database-Entities-Annotations.md): configure fields, indexes, generated values, and concurrency tokens.
+- [Data Annotations](Entitites-DataAnnotations.md): configure fields, indexes, generated values, and concurrency tokens.
   - [Relationships](Data-Entities-Relationships.md): define foreign keys, reference properties, inverse collections, and automatic loading.
   - [Multilingual Entities](Database-Multilingual-Entities.md): configure languages and read or update translations.
 

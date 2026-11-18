@@ -50,4 +50,4 @@ Every entity has one `long` ID regardless of its language. IDs use per-table SQL
 
 ## Related topics
 
-[SQL Server](Database-SqlServer.md) · [Data Annotations](Database-Entities-Annotations.md) · [RAM Caching](Database-RAM-Caching.md) · [Troubleshooting](Troubleshooting.md)
+[SQL Server](Database-SqlServer.md) · [Data Annotations](Entitites-DataAnnotations.md) · [RAM Caching](Database-RAM-Caching.md) · [Troubleshooting](Troubleshooting.md)

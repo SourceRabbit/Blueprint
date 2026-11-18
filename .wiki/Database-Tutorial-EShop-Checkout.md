@@ -701,7 +701,7 @@ V1 and V2 are illustrative labels; the actual tokens are `byte[]` values. The to
 
 The token does not keep the row locked while a consumer edits an object, and Blueprint does not automatically merge conflicting edits. The consumer must handle the exception by reloading current data and deciding whether to merge changes, retry the operation, or inform the user.
 
-In checkout, the queued product update checks `Product.Version`, and the queued basket deletion checks `BasketItem.Version`. Let a failed transaction roll back; after a confirmed rollback, a new `CheckoutAsync()` call creates a new transaction and reevaluates the current basket, prices, and stock. This tutorial propagates the exception and does not retry automatically. See [Data Annotations: Concurrency](Database-Entities-Annotations.md#concurrency).
+In checkout, the queued product update checks `Product.Version`, and the queued basket deletion checks `BasketItem.Version`. Let a failed transaction roll back; after a confirmed rollback, a new `CheckoutAsync()` call creates a new transaction and reevaluates the current basket, prices, and stock. This tutorial propagates the exception and does not retry automatically. See [Data Annotations: Concurrency](Entitites-DataAnnotations.md#concurrency).
 
 ### Why Product needs Version: an administrator and an order
 
@@ -729,4 +729,4 @@ Keep transaction callbacks synchronous and use the queued operations. Do not sta
 
 ## Related topics
 
-[SQL Server](Database-SqlServer.md) · [Transactions](Database-Transactions.md) · [Relationships](Data-Entities-Relationships.md) · [Queries and CRUD](Database-Queries-and-CRUD.md) · [Data Annotations](Database-Entities-Annotations.md) · [Multilingual Entities](Database-Multilingual-Entities.md) · [RAM Caching](Database-RAM-Caching.md)
+[SQL Server](Database-SqlServer.md) · [Transactions](Database-Transactions.md) · [Relationships](Data-Entities-Relationships.md) · [Queries and CRUD](Database-Queries-and-CRUD.md) · [Data Annotations](Entitites-DataAnnotations.md) · [Multilingual Entities](Database-Multilingual-Entities.md) · [RAM Caching](Database-RAM-Caching.md)

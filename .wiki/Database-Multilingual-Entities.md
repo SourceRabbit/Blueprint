@@ -134,4 +134,4 @@ Adding a language may add SQL columns during registration. A new required transl
 
 ## Related topics
 
-[Getting Started](Getting-Started.md) · [Data Annotations](Database-Entities-Annotations.md) · [Queries and CRUD](Database-Queries-and-CRUD.md) · [Schema Synchronization](Database-Entities-Schema-Synchronization.md)
+[Getting Started](Getting-Started.md) · [Data Annotations](Entitites-DataAnnotations.md) · [Queries and CRUD](Database-Queries-and-CRUD.md) · [Schema Synchronization](Database-Entities-Schema-Synchronization.md)

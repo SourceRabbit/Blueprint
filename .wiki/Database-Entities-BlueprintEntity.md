@@ -63,7 +63,7 @@ Mapped properties require public getters and setters. Abstract properties are im
 
 Keep mapped accessors free of side effects: they are used during persistence, materialization, and cached reads or copies. Multilingual accessor implementations are replaced by generated translation routing; assign initial translations through the generated instance or from the constructor, rather than through a multilingual auto-property initializer.
 
-Class constructors run when generated instances are created, including during reads and cache copying. Keep constructors lightweight and free of external effects. The configured default language is set before the constructor runs, allowing a constructor to assign a virtual multilingual property. Implemented custom methods and computed `[NotMapped]` getters are supported; unimplemented abstract methods or events are rejected. See [Data Annotations](Database-Entities-Annotations.md).
+Class constructors run when generated instances are created, including during reads and cache copying. Keep constructors lightweight and free of external effects. The configured default language is set before the constructor runs, allowing a constructor to assign a virtual multilingual property. Implemented custom methods and computed `[NotMapped]` getters are supported; unimplemented abstract methods or events are rejected. See [Data Annotations](Entitites-DataAnnotations.md).
 
 Entity class inheritance does not introduce SQL inheritance tables or discriminator columns. Each registered contract retains its own table, columns, sequence, and relationships.
 
@@ -110,4 +110,4 @@ The Entity API calls stay the same. With unchanged names and mappings, this migr
 
 ## Related topics
 
-[SQL Server](Database-SqlServer.md) · [Data Annotations](Database-Entities-Annotations.md) · [Relationships](Data-Entities-Relationships.md) · [Multilingual Entities](Database-Multilingual-Entities.md) · [EShop - Checkout Tutorial](Database-Tutorial-EShop-Checkout.md) · [User manual](README.md)
+[SQL Server](Database-SqlServer.md) · [Data Annotations](Entitites-DataAnnotations.md) · [Relationships](Data-Entities-Relationships.md) · [Multilingual Entities](Database-Multilingual-Entities.md) · [EShop - Checkout Tutorial](Database-Tutorial-EShop-Checkout.md) · [User manual](README.md)

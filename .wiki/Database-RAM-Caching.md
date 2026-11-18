@@ -83,7 +83,7 @@ SQL Server generates this `rowversion` value and changes it whenever the row is 
 
 If Server A and Server B read the same version, and Server A saves first, Server B's update with the old token fails with `DbUpdateConcurrencyException` instead of overwriting Server A's changes. This check runs against SQL Server when saving, even if the entity was originally read from RAM cache.
 
-The consumer must handle the conflict by reloading the current data and deciding how to merge or retry the intended changes, or by informing the user. Blueprint does not merge conflicting changes automatically. See [Data Annotations: Concurrency](Database-Entities-Annotations.md#concurrency) for details, including transaction handling.
+The consumer must handle the conflict by reloading the current data and deciding how to merge or retry the intended changes, or by informing the user. Blueprint does not merge conflicting changes automatically. See [Data Annotations: Concurrency](Entitites-DataAnnotations.md#concurrency) for details, including transaction handling.
 
 ## Queries and SQL fallback
 

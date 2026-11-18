@@ -158,4 +158,4 @@ Queries inside a transaction use SQL so they see its uncommitted writes. Bluepri
 
 ## Related topics
 
-[Queries and CRUD](Database-Queries-and-CRUD.md) · [Relationships](Data-Entities-Relationships.md) · [Data Annotations](Database-Entities-Annotations.md#concurrency) · [RAM Caching](Database-RAM-Caching.md)
+[Queries and CRUD](Database-Queries-and-CRUD.md) · [Relationships](Data-Entities-Relationships.md) · [Data Annotations](Entitites-DataAnnotations.md#concurrency) · [RAM Caching](Database-RAM-Caching.md)
