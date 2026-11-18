@@ -14,7 +14,7 @@ Visit the [Blueprint Wiki](https://github.com/SourceRabbit/Blueprint/wiki) for s
 
 - .NET 10 SDK and C# 14.
 - An accessible SQL Server instance.
-- SQL permissions for data access and for database creation or schema updates when needed. RAM caching has [additional SQL requirements](.wiki/Database-RAM-Caching.md#sql-server-requirements).
+- SQL permissions for data access and for database creation or schema updates when needed. RAM caching has [additional SQL requirements](.wiki/Database-RAMCaching.md#sql-server-requirements).
 
 ## Installation
 
@@ -56,13 +56,13 @@ You can exclude `Libraries/Blueprint/` from source control because the DLL is do
 
 Clone the repository and add a project reference to `Visual Studio Project/Blueprint/Blueprint.csproj` from your consuming project. This path is relative to the Blueprint repository root. The project reference builds Blueprint with your application and restores its NuGet dependencies. Use this method instead of the DLL reference above.
 
-See the [Getting Started guide](.wiki/Getting-Started.md) for more details about project references and manually supplied DLLs.
+See the [Getting Started guide](.wiki/GettingStarted.md) for more details about project references and manually supplied DLLs.
 
 ## Getting Started
 
 After adding a Blueprint reference, define an entity contract, configure the database and languages, and register the contract. The successfully initialized database becomes active for Entity API calls automatically.
 
-Once the [Product contract](.wiki/Database-Tutorial-EShop-Checkout.md#define-a-contract) is registered and `database` is active:
+Once the [Product contract](.wiki/Database-EShopCheckoutTutorial.md#define-a-contract) is registered and `database` is active:
 
 ```csharp
 using Blueprint.Entities;
@@ -78,7 +78,7 @@ transaction.AddInsert(product);
 await database.TransactionFactory.ExecuteTransactionAsync(transaction);
 ```
 
-The [complete checkout example](.wiki/Database-Tutorial-EShop-Checkout.md#complete-example-in-main) includes the entity contracts, database initialization, user and basket creation, transactional checkout, stock updates, and shutdown. Editing a loaded entity does not save it automatically; persistence is explicit.
+The [complete checkout example](.wiki/Database-EShopCheckoutTutorial.md#complete-example-in-main) includes the entity contracts, database initialization, user and basket creation, transactional checkout, stock updates, and shutdown. Editing a loaded entity does not save it automatically; persistence is explicit.
 
 ## Documentation
 

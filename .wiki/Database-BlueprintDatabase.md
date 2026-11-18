@@ -8,16 +8,16 @@ It cannot be instantiated directly. Create a concrete provider, such as `SqlData
 
 | Provider | Status | Documentation |
 | --- | --- | --- |
-| SQL Server (`SqlDatabase`) | Available. | [SQL Server](Database-SqlServer.md): connection settings, initialization, examples, and permissions. |
+| SQL Server (`SqlDatabase`) | Available. | [SQL Server](Database-SqlDatabase.md): connection settings, initialization, examples, and permissions. |
 | MySQL | Coming Soon; not implemented yet. | [MySQL (Coming Soon)](Database-MySqlServer.md): reserved for MySQL configuration and usage. |
 
-For a complete initialization example, see [SQL Server](Database-SqlServer.md#complete-example-from-entitiestutorial). MySQL support is planned; SQL Server configuration and caching requirements should not be treated as instructions for a future MySQL provider.
+For a complete initialization example, see [SQL Server](Database-SqlDatabase.md#complete-example-from-entitiestutorial). MySQL support is planned; SQL Server configuration and caching requirements should not be treated as instructions for a future MySQL provider.
 
 ## Configuration
 
 The protected base constructor receives a database name, a connection string, and a `List<BlueprintLanguage>`. It validates and stores the settings, captures an independent language configuration, and creates the instance's transaction factory. The base constructor does not open a database connection. The concrete provider initializes and activates the database before applications use the Entity API.
 
-The language list must be nonempty, with unique IDs and case-insensitively unique prefixes. Exactly one language must have an empty prefix; that language is the default. Changing the original list after construction does not reconfigure the database. See [Multilingual Entities](Database-Multilingual-Entities.md) for the full language rules and translation behavior.
+The language list must be nonempty, with unique IDs and case-insensitively unique prefixes. Exactly one language must have an empty prefix; that language is the default. Changing the original list after construction does not reconfigure the database. See [Multilingual Entities](Entitites-MultilingualEntities.md) for the full language rules and translation behavior.
 
 The database name, connection settings, and language configuration are read-only after construction. To change them, finish existing work, dispose the database, and initialize a new instance with the required configuration.
 
@@ -45,7 +45,7 @@ Read it through `database.Name`. To use another database name, dispose the curre
 
 The connection settings stored by the provider. `SqlDatabase` normalizes these settings to include the database selected by `Name`, so the returned string may differ from the original constructor argument.
 
-Reading `database.ConnectionString` does not open a connection. The property has no setter; changing server, authentication, or other connection settings requires a new database instance. See [SQL Server connection settings](Database-SqlServer.md#database-name-and-constructor-behavior).
+Reading `database.ConnectionString` does not open a connection. The property has no setter; changing server, authentication, or other connection settings requires a new database instance. See [SQL Server connection settings](Database-SqlDatabase.md#database-name-and-constructor-behavior).
 
 ### Languages
 
@@ -53,7 +53,7 @@ Reading `database.ConnectionString` does not open a connection. The property has
 
 The independent language configuration captured during construction. Each `BlueprintLanguage` exposes a read-only `ID` and `Prefix`. The language with an empty prefix is the default, regardless of its ID or position in the list.
 
-Use `database.Languages` to inspect the configured languages. Changing the list originally passed to the constructor does not change this snapshot or rebuild the model. A new language configuration requires a new database instance. See [Multilingual Entities](Database-Multilingual-Entities.md).
+Use `database.Languages` to inspect the configured languages. Changing the list originally passed to the constructor does not change this snapshot or rebuild the model. A new language configuration requires a new database instance. See [Multilingual Entities](Entitites-MultilingualEntities.md).
 
 ### TransactionFactory
 
@@ -69,7 +69,7 @@ Use `CreateNewTransaction()` to prepare queued writes and `ExecuteTransactionAsy
 
 The polling interval for detecting external changes to RAM-cached data. It can be changed before or after entity registration; assigning a new value updates an existing cache timer. Values must be at least one millisecond and no greater than `4,294,967,294` milliseconds. An invalid value throws `ArgumentOutOfRangeException`; setting a valid value after disposal throws `ObjectDisposedException`.
 
-For example, `database.RAMCacheRefreshInterval = TimeSpan.FromSeconds(20)` requests polling every twenty seconds. This does not delay the initial cache load or guarantee a maximum synchronization delay. It configures the optional cache rather than selecting which entities are cached. For the current SQL Server implementation, see [RAM Caching](Database-RAM-Caching.md).
+For example, `database.RAMCacheRefreshInterval = TimeSpan.FromSeconds(20)` requests polling every twenty seconds. This does not delay the initial cache load or guarantee a maximum synchronization delay. It configures the optional cache rather than selecting which entities are cached. For the current SQL Server implementation, see [RAM Caching](Database-RAMCaching.md).
 
 ## Methods
 
@@ -80,7 +80,7 @@ For example, `database.RAMCacheRefreshInterval = TimeSpan.FromSeconds(20)` reque
 | [Create&lt;TEntity&gt;()](#create) | Creates an unsaved entity; application code normally uses the entity's `Create()` method. |
 | [Dispose()](#dispose) | Releases resources, clears this instance's active registration, and prevents new data operations. |
 
-The examples below use the [Product contract from the checkout tutorial](Database-Tutorial-EShop-Checkout.md#define-a-contract). Except for the `Dispose` example, they assume an initialized database referenced by `database`. Register Product before creating or querying it. Examples are independent and use these imports as needed:
+The examples below use the [Product contract from the checkout tutorial](Database-EShopCheckoutTutorial.md#define-a-contract). Except for the `Dispose` example, they assume an initialized database referenced by `database`. Register Product before creating or querying it. Examples are independent and use these imports as needed:
 
 ```csharp
 using Blueprint.Database;
@@ -120,17 +120,17 @@ int affectedRows = database.ExecuteNonQuery("UPDATE dbo.Products SET Price = @pr
 Console.WriteLine($"Affected rows: {affectedRows}");
 ```
 
-Replace `123` with the intended existing product ID; an unmatched ID affects zero rows. Direct SQL does not add the entity's concurrency check or multilingual mapping. See [SQL Server: Execute SQL commands](Database-SqlServer.md#execute-sql-commands) for parameter ownership, cache synchronization, and lifetime behavior.
+Replace `123` with the intended existing product ID; an unmatched ID affects zero rows. Direct SQL does not add the entity's concurrency check or multilingual mapping. See [SQL Server: Execute SQL commands](Database-SqlDatabase.md#execute-sql-commands) for parameter ownership, cache synchronization, and lifetime behavior.
 
 ### RegisterEntity
 
-Register a contract with `database.RegisterEntity<Product>()` or the equivalent `database.RegisterEntity(typeof(Product))`. A contract must be a public, non-sealed class deriving from `BlueprintEntityDB` or `BlueprintEntityRAM` and marked with `[Entity]`. See [BlueprintEntity](Database-Entities-BlueprintEntity.md) for contract definitions.
+Register a contract with `database.RegisterEntity<Product>()` or the equivalent `database.RegisterEntity(typeof(Product))`. A contract must be a public, non-sealed class deriving from `BlueprintEntityDB` or `BlueprintEntityRAM` and marked with `[Entity]`. See [BlueprintEntity](Entitites-BlueprintEntity.md) for contract definitions.
 
 Both overloads return `void`. The generic overload takes the contract as `TEntity`; the other overload accepts an `entityType` parameter of type `Type`. A null or invalid contract is rejected, and registration after disposal throws `ObjectDisposedException`.
 
 The base class validates and records the contract, then calls the protected abstract `SynchronizeEntities()` method implemented by the provider. Registration performs synchronization immediately; it does not defer initialization until the first query. Registering the same contract again synchronizes it again without creating a duplicate registration.
 
-With SQL Server, synchronization updates the schema and loads the selected RAM-cached tables before registration returns. If synchronization fails, the newly added registration is removed and the previous active model and cache remain available. Provider configuration changes have their own rollback limits; see [Schema Synchronization](Database-Entities-Schema-Synchronization.md) and [RAM Caching](Database-RAM-Caching.md).
+With SQL Server, synchronization updates the schema and loads the selected RAM-cached tables before registration returns. If synchronization fails, the newly added registration is removed and the previous active model and cache remain available. Provider configuration changes have their own rollback limits; see [Schema Synchronization](Database-SchemaSynchronization.md) and [RAM Caching](Database-RAMCaching.md).
 
 Use the generic overload when the contract is known at compile time:
 
@@ -168,7 +168,7 @@ product.SKU = "CAMERA-NEW-001";
 product.Price = 120m;
 ```
 
-Both examples leave the product unsaved. Persist a fully populated entity explicitly through the Entity API or a queued transaction operation. See [Queries and CRUD](Database-Queries-and-CRUD.md).
+Both examples leave the product unsaved. Persist a fully populated entity explicitly through the Entity API or a queued transaction operation. See [Queries and CRUD](Database-QueriesAndCRUD.md).
 
 ### Dispose
 
@@ -194,7 +194,7 @@ Stop background managers that use the database before disposal. For `SqlDatabase
 
 Use `BlueprintDatabase` for configuration, registration, transactions, and lifetime management. Applications create and access data through entity methods such as `Product.Create()`, `Product.Where(...)`, `Product.Insert(...)`, and `Product.Update(...)`. Import `Blueprint.Entities` to use these static extensions.
 
-The public `Create<TEntity>()` helper supports Blueprint's implementation; application code uses the entity's `Create()` method. Query and command helpers are internal, and the former `Collection<TEntity>()` API has been removed. See [Queries and CRUD](Database-Queries-and-CRUD.md).
+The public `Create<TEntity>()` helper supports Blueprint's implementation; application code uses the entity's `Create()` method. Query and command helpers are internal, and the former `Collection<TEntity>()` API has been removed. See [Queries and CRUD](Database-QueriesAndCRUD.md).
 
 Editing an entity changes that object only. Persist changes explicitly through the Entity API or queue them in a transaction. There is no separate consumer `SaveChanges()` step.
 
@@ -204,7 +204,7 @@ Keep one active `BlueprintDatabase` per process. Successful provider initializat
 
 Keep the instance alive while queries, writes, transactions, or background tasks use it. Deferred queries remain bound to their original database and require it when enumerated. Use a using block to ensure disposal even when registration or application work fails.
 
-Stop or dispose independent `BackgroundTasksManager` instances that use the database before disposing the database itself. Database disposal does not stop those managers. See [Background Tasks](Background-Tasks.md) for the recommended lifetime arrangement.
+Stop or dispose independent `BackgroundTasksManager` instances that use the database before disposing the database itself. Database disposal does not stop those managers. See [Background Tasks](BackgroundTasks.md) for the recommended lifetime arrangement.
 
 Disposal calls the provider's resource-release hook, closes the context, and clears the active registration. Repeated disposal is safe. Operations tied to a disposed instance reject further use; static Entity API calls require a newly initialized database with the relevant contracts registered.
 
@@ -212,4 +212,4 @@ The base class coordinates database operations through a shared lock to protect 
 
 ## Related topics
 
-[SQL Server](Database-SqlServer.md) · [MySQL (Coming Soon)](Database-MySqlServer.md) · [Transactions](Database-Transactions.md) · [Getting Started](Getting-Started.md) · [User manual](README.md)
+[SQL Server](Database-SqlDatabase.md) · [MySQL (Coming Soon)](Database-MySqlServer.md) · [Transactions](Database-Transactions.md) · [Getting Started](GettingStarted.md) · [User manual](README.md)

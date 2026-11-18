@@ -40,14 +40,14 @@ A removed column can still affect writes: an old required column without a usabl
 
 Schema changes are protected by a SQL transaction and an application lock, with table locking where needed. If synchronization fails, schema changes in that transaction are rolled back. The previous active model is retained, and a newly added registration is removed.
 
-RAM-cache prerequisites include database-level Change Tracking and snapshot-isolation settings. These can be enabled before the schema transaction and remain enabled if a later step fails. See [RAM Caching](Database-RAM-Caching.md#sql-server-requirements).
+RAM-cache prerequisites include database-level Change Tracking and snapshot-isolation settings. These can be enabled before the schema transaction and remain enabled if a later step fails. See [RAM Caching](Database-RAMCaching.md#sql-server-requirements).
 
 Registration requires appropriate SQL permissions, including creation or alteration of objects when needed. It can fail for incompatible existing data, duplicate values in a proposed unique index, invalid relationships, or unsupported type changes. Resolve the reported model or data problem before retrying.
 
 ## Generated IDs
 
-Every entity has one `long` ID regardless of its language. IDs use per-table SQL sequences. Do not assign IDs to new entities, depend on contiguous values, or treat ID order as transaction commit order. See [EShop - Checkout Tutorial](Database-Tutorial-EShop-Checkout.md#ids).
+Every entity has one `long` ID regardless of its language. IDs use per-table SQL sequences. Do not assign IDs to new entities, depend on contiguous values, or treat ID order as transaction commit order. See [EShop - Checkout Tutorial](Database-EShopCheckoutTutorial.md#ids).
 
 ## Related topics
 
-[SQL Server](Database-SqlServer.md) · [Data Annotations](Entitites-DataAnnotations.md) · [RAM Caching](Database-RAM-Caching.md) · [Troubleshooting](Troubleshooting.md)
+[SQL Server](Database-SqlDatabase.md) · [Data Annotations](Entitites-DataAnnotations.md) · [RAM Caching](Database-RAMCaching.md) · [Troubleshooting](Troubleshooting.md)

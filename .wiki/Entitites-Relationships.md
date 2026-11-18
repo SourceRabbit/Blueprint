@@ -4,7 +4,7 @@ Relationships connect entity contracts through their IDs. Define a scalar foreig
 
 ## Define a brand and its products
 
-This example uses a simplified version of the [Product contract](Database-Tutorial-EShop-Checkout.md#define-a-contract) with an additional brand relationship. Keep one `Product` definition in your application.
+This example uses a simplified version of the [Product contract](Database-EShopCheckoutTutorial.md#define-a-contract) with an additional brand relationship. Keep one `Product` definition in your application.
 
 ```csharp
 using Blueprint.Entities.Annotations;
@@ -62,7 +62,7 @@ Console.WriteLine(product?.Brand?.Name);
 
 `AutoInclude` on `Product.Brand` loads the reference when the product is materialized. An inverse collection defines the relationship; it does not by itself request automatic loading. Add `AutoInclude` only to navigations that you need automatically, avoiding cycles and unnecessarily large object graphs.
 
-Each `AutoInclude` target selects its own executor from its base class: DB targets read SQL and RAM targets read the synchronized cache, regardless of the parent's source. This works for both references and collections and continues through nested relationships. `AutoInclude` does not enable caching for DB classes. The query's selected language also applies to related entities, and relationships use the same ID across languages. Inside a transaction, the entire graph reads SQL. See [Query Executors](Database-Query-Executors.md) for examples, query evaluation, and consistency.
+Each `AutoInclude` target selects its own executor from its base class: DB targets read SQL and RAM targets read the synchronized cache, regardless of the parent's source. This works for both references and collections and continues through nested relationships. `AutoInclude` does not enable caching for DB classes. The query's selected language also applies to related entities, and relationships use the same ID across languages. Inside a transaction, the entire graph reads SQL. See [Query Executors](Database-QueryExecutors.md) for examples, query evaluation, and consistency.
 
 ## Insert a parent and child together
 
@@ -99,4 +99,4 @@ Relationships use restricted delete behavior. Remove or reassign dependent rows 
 
 ## Related topics
 
-[Data Annotations](Entitites-DataAnnotations.md) · [Queries and CRUD](Database-Queries-and-CRUD.md) · [Transactions](Database-Transactions.md) · [Multilingual Entities](Database-Multilingual-Entities.md)
+[Data Annotations](Entitites-DataAnnotations.md) · [Queries and CRUD](Database-QueriesAndCRUD.md) · [Transactions](Database-Transactions.md) · [Multilingual Entities](Entitites-MultilingualEntities.md)

@@ -4,7 +4,7 @@ Blueprint can run named background tasks on interval or daily schedules. `Backgr
 
 ## Define a task
 
-Create a subclass of `BackgroundTask` and implement the synchronous `Run()` method. This example uses the [Product contract](Database-Tutorial-EShop-Checkout.md#define-a-contract) from the EShop checkout tutorial:
+Create a subclass of `BackgroundTask` and implement the synchronous `Run()` method. This example uses the [Product contract](Database-EShopCheckoutTutorial.md#define-a-contract) from the EShop checkout tutorial:
 
 ```csharp
 using Blueprint.BackgroundTasks;
@@ -54,7 +54,7 @@ using (BlueprintDatabase database = new SqlDatabase("MyEshopDatabase", sqlServer
 }
 ```
 
-Import `Blueprint.Database` and `Blueprint.Database.Sql` for this lifetime example, and supply the connection settings and languages as shown in [SQL Server](Database-SqlServer.md). The control examples below run inside the manager's using block. A manager whose tasks do not access entities needs no database.
+Import `Blueprint.Database` and `Blueprint.Database.Sql` for this lifetime example, and supply the connection settings and languages as shown in [SQL Server](Database-SqlDatabase.md). The control examples below run inside the manager's using block. A manager whose tasks do not access entities needs no database.
 
 Names must be nonempty and unique within the manager; comparison is case-sensitive. A task instance cannot be registered twice in that manager. Supply a non-null description and schedule.
 
@@ -116,4 +116,4 @@ Keep work inside the synchronous `Run()` call. Do not implement `async void Run(
 
 ## Related topics
 
-[Database lifetime](Database-SqlServer.md#application-lifetime) · [Queries and CRUD](Database-Queries-and-CRUD.md) · [Troubleshooting](Troubleshooting.md)
+[Database lifetime](Database-SqlDatabase.md#application-lifetime) · [Queries and CRUD](Database-QueriesAndCRUD.md) · [Troubleshooting](Troubleshooting.md)

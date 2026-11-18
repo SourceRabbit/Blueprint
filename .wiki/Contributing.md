@@ -196,9 +196,9 @@ Applications, demos, manual examples, and consumer tests use the Entity API, suc
 
 Use `Blueprint.Entities` for entity classes and the shared Entity API, and `Blueprint.Entities.Annotations` for their annotations. Keep the SQL persistence implementation in `Blueprint.Database.Sql`.
 
-Declare entity contracts as public, non-sealed classes derived from `BlueprintEntityDB` or `BlueprintEntityRAM`, with `[Entity]` on the class. Abstract classes with public abstract properties are supported; implemented multilingual properties require virtual accessors. Do not introduce the removed `[RAMCached]` annotation. Continue to create entity instances through the Entity API so Blueprint supplies the generated subclass. See [entity classes and migration](Database-Entities-BlueprintEntity.md).
+Declare entity contracts as public, non-sealed classes derived from `BlueprintEntityDB` or `BlueprintEntityRAM`, with `[Entity]` on the class. Abstract classes with public abstract properties are supported; implemented multilingual properties require virtual accessors. Do not introduce the removed `[RAMCached]` annotation. Continue to create entity instances through the Entity API so Blueprint supplies the generated subclass. See [entity classes and migration](Entitites-BlueprintEntity.md).
 
-Direct `BlueprintDatabase.Create<T>()` calls belong to Blueprint's implementation. Queries and writes are accessed through the Entity API; the former `Collection<T>()` helper has been removed. Use the database for configuration and its `TransactionFactory` for transactions. See [EShop - Checkout Tutorial](Database-Tutorial-EShop-Checkout.md) and [Transactions](Database-Transactions.md).
+Direct `BlueprintDatabase.Create<T>()` calls belong to Blueprint's implementation. Queries and writes are accessed through the Entity API; the former `Collection<T>()` helper has been removed. Use the database for configuration and its `TransactionFactory` for transactions. See [EShop - Checkout Tutorial](Database-EShopCheckoutTutorial.md) and [Transactions](Database-Transactions.md).
 
 ## Tests and verification
 
@@ -216,4 +216,4 @@ The publishing script maps `README.md` to `Home.md`, converts page links to Wiki
 
 ## Related topics
 
-[Getting Started](Getting-Started.md) · [EShop - Checkout Tutorial](Database-Tutorial-EShop-Checkout.md) · [Transactions](Database-Transactions.md)
+[Getting Started](GettingStarted.md) · [EShop - Checkout Tutorial](Database-EShopCheckoutTutorial.md) · [Transactions](Database-Transactions.md)

@@ -26,7 +26,7 @@ Select an annotation to jump to its description, example, and usage notes. The b
 | [DefaultValue](#defaultvalue) | `System.ComponentModel` | Configures a SQL default for the column. |
 | [ReadOnly](#readonly) | `System.ComponentModel` | Allows an initial value but rejects later changes when saving. |
 
-Caching is selected by deriving the entity class from `BlueprintEntityRAM`; the former `[RAMCached]` annotation has been removed. `AutoInclude` never enables caching for a `BlueprintEntityDB` class. See [AutoInclude data sources](Database-RAM-Caching.md#autoinclude-data-sources).
+Caching is selected by deriving the entity class from `BlueprintEntityRAM`; the former `[RAMCached]` annotation has been removed. `AutoInclude` never enables caching for a `BlueprintEntityDB` class. See [AutoInclude data sources](Database-RAMCaching.md#autoinclude-data-sources).
 
 Blueprint does not run a general form-validation pipeline for every .NET validation attribute. Validate user input in your application; use [transaction validation](Database-Transactions.md#validate-before-commit) for checks that must succeed before database commit.
 
@@ -60,7 +60,7 @@ public abstract class Category : BlueprintEntityDB
 }
 ```
 
-This contract maps to `catalog.Categories`. With `[Entity]` alone, the table name is the class name and the schema is `dbo`. Each registered class must declare its own annotation; it is not inherited from a base contract. The class must be public, non-sealed, and satisfy the [entity contract requirements](Database-Entities-BlueprintEntity.md#define-an-entity).
+This contract maps to `catalog.Categories`. With `[Entity]` alone, the table name is the class name and the schema is `dbo`. Each registered class must declare its own annotation; it is not inherited from a base contract. The class must be public, non-sealed, and satisfy the [entity contract requirements](Entitites-BlueprintEntity.md#define-an-entity).
 
 ### EntityIndex
 
@@ -76,7 +76,7 @@ public abstract class Product : BlueprintEntityDB
 }
 ```
 
-The example requires unique SKU values. Supply C# property names, such as `nameof(SKU)`, rather than physical column names. Pass several property names for a composite index, or apply the annotation more than once for separate indexes. Navigation and `NotMapped` properties cannot be indexed. Creating a unique index can fail if existing rows contain duplicates; see [Schema Synchronization](Database-Entities-Schema-Synchronization.md).
+The example requires unique SKU values. Supply C# property names, such as `nameof(SKU)`, rather than physical column names. Pass several property names for a composite index, or apply the annotation more than once for separate indexes. Navigation and `NotMapped` properties cannot be indexed. Creating a unique index can fail if existing rows contain duplicates; see [Schema Synchronization](Database-SchemaSynchronization.md).
 
 ### Multilingual
 
@@ -87,7 +87,7 @@ Apply `[Multilingual]` to a mapped string property to store a separate value for
 public abstract string? Title { get; set; }
 ```
 
-`CurrentLanguage` selects the value read or assigned on an instance. Queries select a language through the Entity API. Abstract properties are supported; implemented multilingual properties require overridable accessors. Without fallback, a missing translation stays null or empty when read. See [Multilingual Entities](Database-Multilingual-Entities.md) for language configuration and read/write examples.
+`CurrentLanguage` selects the value read or assigned on an instance. Queries select a language through the Entity API. Abstract properties are supported; implemented multilingual properties require overridable accessors. Without fallback, a missing translation stays null or empty when read. See [Multilingual Entities](Entitites-MultilingualEntities.md) for language configuration and read/write examples.
 
 ### FallbackToDefaultLanguage
 
@@ -99,7 +99,7 @@ Combine `[FallbackToDefaultLanguage]` with `[Multilingual]` when a missing trans
 public abstract string? Title { get; set; }
 ```
 
-Fallback applies when the selected translation is null or `""`; whitespace is returned unchanged. It affects reads, including SQL and RAM predicates and projections, without changing the stored translation or `CurrentLanguage`. The default language is the configured language with an empty prefix. Registration rejects this annotation without `Multilingual`. See [Default-language fallback](Database-Multilingual-Entities.md#default-language-fallback).
+Fallback applies when the selected translation is null or `""`; whitespace is returned unchanged. It affects reads, including SQL and RAM predicates and projections, without changing the stored translation or `CurrentLanguage`. The default language is the configured language with an empty prefix. Registration rejects this annotation without `Multilingual`. See [Default-language fallback](Entitites-MultilingualEntities.md#default-language-fallback).
 
 ### AutoInclude
 
@@ -122,7 +122,7 @@ public abstract class Product : BlueprintEntityDB
 }
 ```
 
-In this example, reading a product reads its root from SQL and its brand through the RAM executor. Each related entity chooses its own executor, including nested includes; transactions read the entire graph from SQL. `AutoInclude` requests loading, not cascading writes or caching of DB entities. Include traversal stops when a type repeats on the same path. See [Relationships](Data-Entities-Relationships.md#load-related-data) and [Query Executors](Database-Query-Executors.md).
+In this example, reading a product reads its root from SQL and its brand through the RAM executor. Each related entity chooses its own executor, including nested includes; transactions read the entire graph from SQL. `AutoInclude` requests loading, not cascading writes or caching of DB entities. Include traversal stops when a type repeats on the same path. See [Relationships](Entitites-Relationships.md#load-related-data) and [Query Executors](Database-QueryExecutors.md).
 
 ## .NET and EF Core annotations
 
@@ -210,7 +210,7 @@ public string DisplayLabel
 }
 ```
 
-The example stores `Code` and `Name` but creates no column for `DisplayLabel`. An implemented `NotMapped` getter can omit a setter. Evaluate such getters after materializing results; neither SQL translation nor RAM query eligibility is guaranteed for an unmapped property. See [Query limits](Database-Queries-and-CRUD.md#query-limits-and-cached-entities).
+The example stores `Code` and `Name` but creates no column for `DisplayLabel`. An implemented `NotMapped` getter can omit a setter. Evaluate such getters after materializing results; neither SQL translation nor RAM query eligibility is guaranteed for an unmapped property. See [Query limits](Database-QueriesAndCRUD.md#query-limits-and-cached-entities).
 
 ### ForeignKey
 
@@ -233,7 +233,7 @@ public abstract class Product : BlueprintEntityDB
 }
 ```
 
-Here `ManufacturerID` points to `Brand.ID`. Without the annotation, Blueprint expects the navigation name followed by `ID`, which would be `BrandID`. A nullable key represents an optional relationship; use a non-nullable `long` for a required one. The annotation defines the relationship; add `AutoInclude` when it should load automatically. See [Relationships](Data-Entities-Relationships.md).
+Here `ManufacturerID` points to `Brand.ID`. Without the annotation, Blueprint expects the navigation name followed by `ID`, which would be `BrandID`. A nullable key represents an optional relationship; use a non-nullable `long` for a required one. The annotation defines the relationship; add `AutoInclude` when it should load automatically. See [Relationships](Entitites-Relationships.md).
 
 ### InverseProperty
 
@@ -279,7 +279,7 @@ Use `[DefaultValue(value)]` to configure a database default for a column:
 public abstract int SortOrder { get; set; }
 ```
 
-This declares a SQL default of 10. It does not initialize `SortOrder` to 10 when `Create()` returns an object; the database default applies when an insert uses the generated default. Assign values explicitly when needed before saving. A default can also support adding a required column to an existing table; see [Schema Synchronization](Database-Entities-Schema-Synchronization.md#supported-changes).
+This declares a SQL default of 10. It does not initialize `SortOrder` to 10 when `Create()` returns an object; the database default applies when an insert uses the generated default. Assign values explicitly when needed before saving. A default can also support adding a required column to an existing table; see [Schema Synchronization](Database-SchemaSynchronization.md#supported-changes).
 
 ### ReadOnly
 
@@ -342,9 +342,9 @@ For ordinary reference properties, nullable reference annotations affect whether
 
 For multilingual properties, use an explicit `[Required]` only when **every configured translation** must exist. A non-nullable C# reference annotation alone does not require all translations. Length, precision, and column options apply to the generated language columns.
 
-Use `[FallbackToDefaultLanguage]` on a mapped `[Multilingual]` string to opt into default-language fallback for `null` and `""`. Whitespace remains unchanged. Fallback affects reads in SQL and RAM cache; writes still target the selected translation and `[Required]` continues to constrain stored values. See [Default-language fallback](Database-Multilingual-Entities.md#default-language-fallback) for examples and query behavior.
+Use `[FallbackToDefaultLanguage]` on a mapped `[Multilingual]` string to opt into default-language fallback for `null` and `""`. Whitespace remains unchanged. Fallback affects reads in SQL and RAM cache; writes still target the selected translation and `[Required]` continues to constrain stored values. See [Default-language fallback](Entitites-MultilingualEntities.md#default-language-fallback) for examples and query behavior.
 
-`DefaultValue` defines a database default; it is not a general initializer for an object returned by `Create()`. Assign values the application needs explicitly. See [Schema Synchronization](Database-Entities-Schema-Synchronization.md) for adding required fields to populated tables.
+`DefaultValue` defines a database default; it is not a general initializer for an object returned by `Create()`. Assign values the application needs explicitly. See [Schema Synchronization](Database-SchemaSynchronization.md) for adding required fields to populated tables.
 
 ## Read-only and computed properties
 
@@ -362,4 +362,4 @@ A static predicate delete such as `Product.Delete(item => item.ID == productID)`
 
 ## Related topics
 
-[EShop - Checkout Tutorial](Database-Tutorial-EShop-Checkout.md) · [Relationships](Data-Entities-Relationships.md) · [Schema Synchronization](Database-Entities-Schema-Synchronization.md) · [Transactions](Database-Transactions.md)
+[EShop - Checkout Tutorial](Database-EShopCheckoutTutorial.md) · [Relationships](Entitites-Relationships.md) · [Schema Synchronization](Database-SchemaSynchronization.md) · [Transactions](Database-Transactions.md)

@@ -8,10 +8,10 @@ The base class captures `Environment.MachineName` once during construction and e
 
 | Implementation | Status | Documentation |
 | --- | --- | --- |
-| `SqlLog` | Available; implements logging in SQL Server. | [SqlLog](SqlLog.md): initialization, examples, SQL table, permissions, and execution behavior. |
-| `MySqlLog` | Coming Soon; not implemented yet. | [MySqlLog (Coming Soon)](MySqlLog.md): reserved for MySQL logging configuration and usage. |
+| `SqlLog` | Available; implements logging in SQL Server. | [SqlLog](Log-SqlLog.md): initialization, examples, SQL table, permissions, and execution behavior. |
+| `MySqlLog` | Coming Soon; not implemented yet. | [MySqlLog (Coming Soon)](Log-MySqlLog.md): reserved for MySQL logging configuration and usage. |
 
-Application code can depend on `BlueprintLog` while choosing the concrete implementation during initialization. For a working example, see [Create a SQL log](SqlLog.md#create-a-sql-log). Connection settings, table creation, timestamp generation and precision, and transaction behavior belong to the implementation's documentation.
+Application code can depend on `BlueprintLog` while choosing the concrete implementation during initialization. For a working example, see [Create a SQL log](Log-SqlLog.md#create-a-sql-log). Connection settings, table creation, timestamp generation and precision, and transaction behavior belong to the implementation's documentation.
 
 ## Properties
 
@@ -36,7 +36,7 @@ Read it through `log.MachineName`, for example when requesting events from the c
 | [CountFromLog(...)](#countfromlog) | Counts matching events before pagination using the same interval, level, and machine filters. |
 | [DeleteFromLog(dateTimeUtcBefore)](#deletefromlog) | Deletes all events strictly before a UTC cutoff, across all levels and machines. |
 
-All four methods are abstract; the selected log provider implements persistence, queries, and deletion. The examples below assume an initialized `BlueprintLog` variable named `log`. See [Create a SQL log](SqlLog.md#create-a-sql-log) for initialization. Examples are independent and use these imports as needed:
+All four methods are abstract; the selected log provider implements persistence, queries, and deletion. The examples below assume an initialized `BlueprintLog` variable named `log`. See [Create a SQL log](Log-SqlLog.md#create-a-sql-log) for initialization. Examples are independent and use these imports as needed:
 
 ```csharp
 using Blueprint.Log;
@@ -78,7 +78,7 @@ catch (System.IO.IOException exception)
 }
 ```
 
-See [SqlLog: Write an event](SqlLog.md#write-an-event) for SQL Server timestamp behavior and exception storage.
+See [SqlLog: Write an event](Log-SqlLog.md#write-an-event) for SQL Server timestamp behavior and exception storage.
 
 ### ReadFromLog
 
@@ -124,7 +124,7 @@ foreach (LogEntry entry in machineErrors)
 }
 ```
 
-See [SqlLog: Read events](SqlLog.md#read-events) for SQL Server filtering details.
+See [SqlLog: Read events](Log-SqlLog.md#read-events) for SQL Server filtering details.
 
 #### Paged reads
 
@@ -178,7 +178,7 @@ long machineErrorCount = log.CountFromLog(fromUtc, toUtc, EBlueprintLogLevel.Err
 Console.WriteLine($"Events: {totalCount}; errors: {errorCount}; errors from this machine: {machineErrorCount}");
 ```
 
-See [SqlLog: Count and paginate events](SqlLog.md#count-and-paginate-events) for a complete grid example and the effects of concurrent writes between count and read calls.
+See [SqlLog: Count and paginate events](Log-SqlLog.md#count-and-paginate-events) for a complete grid example and the effects of concurrent writes between count and read calls.
 
 ### DeleteFromLog
 
@@ -193,7 +193,7 @@ DateTime cutoffUtc = DateTime.UtcNow.AddDays(-30);
 log.DeleteFromLog(cutoffUtc);
 ```
 
-Call the method explicitly when cleanup is required; it does not enable a recurring retention policy. Custom `BlueprintLog` implementations must implement this abstract method. See [SqlLog: Delete old events](SqlLog.md#delete-old-events) for SQL permissions and transaction behavior.
+Call the method explicitly when cleanup is required; it does not enable a recurring retention policy. Custom `BlueprintLog` implementations must implement this abstract method. See [SqlLog: Delete old events](Log-SqlLog.md#delete-old-events) for SQL permissions and transaction behavior.
 
 ## Log levels
 
@@ -224,8 +224,8 @@ The caller chooses the level when writing an event. The shared API has no minimu
 | `Exception` | `string?` | The stored exception text, or `null`. |
 | `MachineName` | `string` | The machine name recorded by the writer. |
 
-Reading does not reconstruct the original `Exception` object. Later writes do not modify an already returned entry or result collection. See [SqlLog: SQL table](SqlLog.md#sql-table) for the SQL Server column types and timestamp precision.
+Reading does not reconstruct the original `Exception` object. Later writes do not modify an already returned entry or result collection. See [SqlLog: SQL table](Log-SqlLog.md#sql-table) for the SQL Server column types and timestamp precision.
 
 ## Related topics
 
-[SqlLog](SqlLog.md) · [Getting Started](Getting-Started.md) · [Contributing](Contributing.md)
+[SqlLog](Log-SqlLog.md) · [Getting Started](GettingStarted.md) · [Contributing](Contributing.md)

@@ -1,10 +1,10 @@
-# SQL Server
+# SqlDatabase (Microsoft SQL Server)
 
 `SqlDatabase`, in the `Blueprint.Database.Sql` namespace, is Blueprint's Microsoft SQL Server provider. It inherits configuration, entity registration, and resource management from the abstract [BlueprintDatabase](Database-BlueprintDatabase.md) class and implements `IDisposable`.
 
 This guide covers connection settings, languages, entity registration, and application lifetime. Its complete example follows the [EntitiesTutorial](../Visual%20Studio%20Project/Blueprint.Tests/Tutorial1/EntitiesTutorial.cs) initialization flow.
 
-Before writing code, read [Contributing](Contributing.md). Follow [Getting Started](Getting-Started.md) to reference Blueprint in a .NET 10 application using C# 14.
+Before writing code, read [Contributing](Contributing.md). Follow [Getting Started](GettingStarted.md) to reference Blueprint in a .NET 10 application using C# 14.
 
 ## Configuration and languages
 
@@ -22,7 +22,7 @@ The language list must satisfy these rules:
 - Exactly one language has `string.Empty` as its prefix. This is the default language, regardless of its ID or position in the list.
 - Null languages, null prefixes, and nonempty whitespace-only prefixes are rejected.
 
-The database keeps an independent copy of the list. Changing the supplied list later does not reconfigure its languages. After activation, read the configured languages through `database.Languages`. For translation storage, language selection, and changing language configurations, see [Multilingual Entities](Database-Multilingual-Entities.md).
+The database keeps an independent copy of the list. Changing the supplied list later does not reconfigure its languages. After activation, read the configured languages through `database.Languages`. For translation storage, language selection, and changing language configurations, see [Multilingual Entities](Entitites-MultilingualEntities.md).
 
 ### A database with one language
 
@@ -274,7 +274,7 @@ Each contract must be a public, non-sealed class deriving from `BlueprintEntityD
 
 Registration performs provider work immediately. With SQL Server, it synchronizes the schema and loads every discovered `BlueprintEntityRAM` table, including its translations, before returning. Related DB entities remain SQL-backed. Repeating registration for the same type synchronizes again without adding a duplicate registration.
 
-New contracts can also be registered through `database` after database initialization. If synchronization or cache loading fails, a newly added registration is removed and the previous active model and cache remain available. This does not mean every SQL Server configuration change is undone; see [Schema Synchronization](Database-Entities-Schema-Synchronization.md) and [RAM Caching](Database-RAM-Caching.md) for details.
+New contracts can also be registered through `database` after database initialization. If synchronization or cache loading fails, a newly added registration is removed and the previous active model and cache remain available. This does not mean every SQL Server configuration change is undone; see [Schema Synchronization](Database-SchemaSynchronization.md) and [RAM Caching](Database-RAMCaching.md) for details.
 
 ## Shared properties and services
 
@@ -287,7 +287,7 @@ New contracts can also be registered through `database` after database initializ
 | `Languages` | Gets the independent, read-only language configuration. |
 | `Dispose()` | Clears the active database, releases resources, and prevents further data operations. |
 
-`RAMCacheRefreshInterval` accepts values from one millisecond through the supported timer range, and can be changed before or after entity registration. It configures polling only for entities derived from `BlueprintEntityRAM`; AutoInclude DB targets use their database executor. The interval is not a guaranteed maximum delay before external changes become visible. See [RAM Caching](Database-RAM-Caching.md).
+`RAMCacheRefreshInterval` accepts values from one millisecond through the supported timer range, and can be changed before or after entity registration. It configures polling only for entities derived from `BlueprintEntityRAM`; AutoInclude DB targets use their database executor. The interval is not a guaranteed maximum delay before external changes become visible. See [RAM Caching](Database-RAMCaching.md).
 
 The languages are configured at construction and exposed through `BlueprintDatabase.Languages`, not through a writable database property. To use another connection or language configuration, create a new database instance and register its entities.
 
@@ -297,7 +297,7 @@ Use the database for configuration, registration, and lifetime management. Creat
 
 Although `BlueprintDatabase` exposes `Create<TEntity>()`, direct use of this helper belongs to Blueprint's implementation. The former `Collection<TEntity>()` helper has been removed; queries and writes are accessed through the Entity API. Applications, demos, and tests use the Entity API. Import `Blueprint.Entities` in files using its static extensions.
 
-Entities returned by queries are independent instances without permanent tracking. Changing a property does not save it automatically; call the appropriate Entity method. See [EShop - Checkout Tutorial](Database-Tutorial-EShop-Checkout.md) and [Queries and CRUD](Database-Queries-and-CRUD.md).
+Entities returned by queries are independent instances without permanent tracking. Changing a property does not save it automatically; call the appropriate Entity method. See [EShop - Checkout Tutorial](Database-EShopCheckoutTutorial.md) and [Queries and CRUD](Database-QueriesAndCRUD.md).
 
 ## Execute SQL commands
 
@@ -331,7 +331,7 @@ Disposal rejects new calls but does not cancel or wait for an independent comman
 
 Keep one active `BlueprintDatabase` for the application. Successful provider initialization activates it automatically; creating another database while one is active throws. Failed initialization does not replace the active database. Its resources must remain available while queries, writes, and background work are running. A query returned by Where still needs its original database when it is enumerated, for example by `ToList()`.
 
-At application shutdown, stop or dispose any independent `BackgroundTasksManager` instances that use the database, then dispose the database. A manager waits for its running tasks and callbacks; database disposal does not stop managers. See [Background Tasks](Background-Tasks.md) for a nested using example that guarantees this order.
+At application shutdown, stop or dispose any independent `BackgroundTasksManager` instances that use the database, then dispose the database. A manager waits for its running tasks and callbacks; database disposal does not stop managers. See [Background Tasks](BackgroundTasks.md) for a nested using example that guarantees this order.
 
 Use a using block to dispose any successfully constructed database even when entity registration or application work fails. Disposal can be called repeatedly. After disposal, static Entity calls fail until a new database is initialized, and operations tied to the old database reject further use.
 
@@ -347,7 +347,7 @@ This synchronization does not make concurrent edits to an entity object safe, an
 
 The current provider needs a SQL identity that can connect to `master` and the application database. When objects are missing, initialization and registration also need permissions to create the database and synchronize its tables, columns, indexes, and sequences. Product insertion needs the corresponding write permissions.
 
-Because the tutorial derives Product from `BlueprintEntityRAM`, registration prepares SQL Server Change Tracking and snapshot isolation. Enabling missing settings requires the corresponding `ALTER DATABASE` and `ALTER TABLE` permissions. Reading the cache requires `SELECT` and `VIEW CHANGE TRACKING` on the relevant tables. Existing settings can already be provisioned by an administrator. See [RAM caching requirements](Database-RAM-Caching.md#sql-server-requirements) and [Schema Synchronization](Database-Entities-Schema-Synchronization.md).
+Because the tutorial derives Product from `BlueprintEntityRAM`, registration prepares SQL Server Change Tracking and snapshot isolation. Enabling missing settings requires the corresponding `ALTER DATABASE` and `ALTER TABLE` permissions. Reading the cache requires `SELECT` and `VIEW CHANGE TRACKING` on the relevant tables. Existing settings can already be provisioned by an administrator. See [RAM caching requirements](Database-RAMCaching.md#sql-server-requirements) and [Schema Synchronization](Database-SchemaSynchronization.md).
 
 ## Connection and initialization problems
 
@@ -364,4 +364,4 @@ Use the SQL exception and its inner exception to identify the failing stage. Gen
 
 ## Related topics
 
-[BlueprintDatabase](Database-BlueprintDatabase.md) · [Getting Started](Getting-Started.md) · [RAM Caching](Database-RAM-Caching.md) · [Schema Synchronization](Database-Entities-Schema-Synchronization.md) · [User manual](README.md)
+[BlueprintDatabase](Database-BlueprintDatabase.md) · [Getting Started](GettingStarted.md) · [RAM Caching](Database-RAMCaching.md) · [Schema Synchronization](Database-SchemaSynchronization.md) · [User manual](README.md)

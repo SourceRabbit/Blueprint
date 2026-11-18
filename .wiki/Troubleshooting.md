@@ -10,12 +10,12 @@ Start with the exception and its inner exceptions, the operation being performed
 | A previously valid API call no longer builds after replacing a DLL | Rebuild consumers against the same DLL and compatible dependencies. Transactions now use `database.TransactionFactory`; see [Transactions](Database-Transactions.md). |
 | `SqlDatabase` construction fails | Check server reachability, authentication, certificate configuration, and permissions to access or create the named database. Construction connects immediately. |
 | An entity cannot be created or queried | Ensure it is a public, non-sealed class deriving from `BlueprintEntityDB` or `BlueprintEntityRAM`, has `[Entity]`, is registered, and the database has initialized successfully. |
-| An old interface or `[RAMCached]` declaration no longer compiles | Migrate the contract to a class with the appropriate DB/RAM base, add public abstract properties or implemented class properties, remove the cache annotation, and rebuild consumers. See [migration steps](Database-Entities-BlueprintEntity.md#migrating-existing-entities). |
+| An old interface or `[RAMCached]` declaration no longer compiles | Migrate the contract to a class with the appropriate DB/RAM base, add public abstract properties or implemented class properties, remove the cache annotation, and rebuild consumers. See [migration steps](Entitites-BlueprintEntity.md#migrating-existing-entities). |
 | Class registration rejects a constructor or property | Supply a public or protected parameterless constructor, public mapped accessors, and abstract or virtual multilingual properties. Do not seal the class, hide inherited properties, or leave custom abstract methods unimplemented. |
 | A second database cannot be activated | Keep one active database. Stop dependent background work and dispose the old database before switching. |
 | Language validation fails | Supply a nonempty list with unique IDs and case-insensitively unique prefixes, exactly one empty prefix, and no null or whitespace-only prefixes. |
 | Registration fails after adding a required field | Existing rows may need a default or explicit data migration. Blueprint does not invent required values. |
-| Registration rejects a schema change | Check existing data, nulls, duplicate unique keys, narrowing conversions, and SQL permissions. See [Schema Synchronization](Database-Entities-Schema-Synchronization.md). |
+| Registration rejects a schema change | Check existing data, nulls, duplicate unique keys, narrowing conversions, and SQL permissions. See [Schema Synchronization](Database-SchemaSynchronization.md). |
 | A relationship fails to register | Declare its scalar foreign key, verify `ForeignKey` and `InverseProperty` names, and use registered entity contracts for navigations. |
 
 ## Queries and persistence
@@ -67,4 +67,4 @@ Include the Blueprint version or commit, target framework, a minimal entity cont
 
 ## Related topics
 
-[Getting Started](Getting-Started.md) · [SQL Server](Database-SqlServer.md) · [Transactions](Database-Transactions.md) · [RAM Caching](Database-RAM-Caching.md) · [Background Tasks](Background-Tasks.md)
+[Getting Started](GettingStarted.md) · [SQL Server](Database-SqlDatabase.md) · [Transactions](Database-Transactions.md) · [RAM Caching](Database-RAMCaching.md) · [Background Tasks](BackgroundTasks.md)

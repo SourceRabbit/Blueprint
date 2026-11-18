@@ -1,12 +1,12 @@
 # Queries and CRUD
 
-Use the static Entity API on registered contracts for reads and writes. Import `Blueprint.Entities` and `System.Linq`; initialize the database and register the contracts as shown in the [complete checkout example](Database-Tutorial-EShop-Checkout.md#complete-example-in-main).
+Use the static Entity API on registered contracts for reads and writes. Import `Blueprint.Entities` and `System.Linq`; initialize the database and register the contracts as shown in the [complete checkout example](Database-EShopCheckoutTutorial.md#complete-example-in-main).
 
 The Entity API keeps the same signatures for reads and writes. The former `Collection<TEntity>` type and `database.Collection<TEntity>()` helpers have been removed. Use the Entity API for these operations, and import `Blueprint.Database.Queries` for `TextSearch` extensions.
 
-Examples use the [Product contract](Database-Tutorial-EShop-Checkout.md#define-a-contract). `productID` represents an existing product ID supplied by your application. Run each write example independently and use unique SKUs when inserting again.
+Examples use the [Product contract](Database-EShopCheckoutTutorial.md#define-a-contract). `productID` represents an existing product ID supplied by your application. Run each write example independently and use unique SKUs when inserting again.
 
-Both DB and RAM entity classes use this same LINQ syntax. Blueprint selects `QueryExecutor_Database` for `BlueprintEntityDB` and `QueryExecutor_RAM` for `BlueprintEntityRAM`. Every `AutoInclude` target selects its own executor independently of its parent, so results can contain both SQL and RAM entities. See [Query Executors](Database-Query-Executors.md) for a release-year/price example and mixed-source behavior.
+Both DB and RAM entity classes use this same LINQ syntax. Blueprint selects `QueryExecutor_Database` for `BlueprintEntityDB` and `QueryExecutor_RAM` for `BlueprintEntityRAM`. Every `AutoInclude` target selects its own executor independently of its parent, so results can contain both SQL and RAM entities. See [Query Executors](Database-QueryExecutors.md) for a release-year/price example and mixed-source behavior.
 
 ## Method index
 
@@ -42,7 +42,7 @@ These methods execute the composed query through the entity's executor, subject 
 
 ### Create and write entities
 
-`Create` only creates an object. `Insert`, `Update`, and `Delete` execute writes in SQL for both DB and RAM entities; RAM entities retain their [cache synchronization](Database-RAM-Caching.md#refresh-interval-and-consistency) behavior.
+`Create` only creates an object. `Insert`, `Update`, and `Delete` execute writes in SQL for both DB and RAM entities; RAM entities retain their [cache synchronization](Database-RAMCaching.md#refresh-interval-and-consistency) behavior.
 
 | Method | Available through | Purpose |
 | --- | --- | --- |
@@ -231,7 +231,7 @@ The case and accent columns below describe the SQL Server collations. RAM uses .
 - .NET linguistic comparisons and SQL Server collations are separate implementations and can differ, including the Greek `IgnoreNonSpace` case above. Unicode equivalences and sorting-version changes can also affect matching. This is a linguistic search API, not an ordinal identity comparison.
 - Explicit collation and arbitrary substring searches do not guarantee index seeks. This feature preserves the existing query routing and cache filtering before result copies; it does not introduce a full-text index.
 
-See [RAM Caching](Database-RAM-Caching.md#queries-and-sql-fallback), [.NET CompareOptions](https://learn.microsoft.com/en-us/dotnet/api/system.globalization.compareoptions), and [EF Core collations](https://learn.microsoft.com/en-us/ef/core/miscellaneous/collations-and-case-sensitivity).
+See [RAM Caching](Database-RAMCaching.md#queries-and-sql-fallback), [.NET CompareOptions](https://learn.microsoft.com/en-us/dotnet/api/system.globalization.compareoptions), and [EF Core collations](https://learn.microsoft.com/en-us/ef/core/miscellaneous/collations-and-case-sensitivity).
 
 ## StartsWith with case and accent options
 
@@ -395,8 +395,8 @@ Separate direct CRUD calls are not one shared atomic transaction. Use [Transacti
 
 SQL queries must be translatable by the provider. Arbitrary C# methods and `NotMapped` getters do not automatically become SQL. Materialize a suitably filtered set before applying application-only logic.
 
-For `BlueprintEntityRAM` contracts, eligible queries execute against in-memory snapshots; others use SQL. In-memory string comparisons can differ from the database collation. Returned entities remain independent objects. See [RAM Caching](Database-RAM-Caching.md) for query routing and paging behavior.
+For `BlueprintEntityRAM` contracts, eligible queries execute against in-memory snapshots; others use SQL. In-memory string comparisons can differ from the database collation. Returned entities remain independent objects. See [RAM Caching](Database-RAMCaching.md) for query routing and paging behavior.
 
 ## Related topics
 
-[EShop - Checkout Tutorial](Database-Tutorial-EShop-Checkout.md) · [Transactions](Database-Transactions.md) · [Multilingual Entities](Database-Multilingual-Entities.md) · [RAM Caching](Database-RAM-Caching.md)
+[EShop - Checkout Tutorial](Database-EShopCheckoutTutorial.md) · [Transactions](Database-Transactions.md) · [Multilingual Entities](Entitites-MultilingualEntities.md) · [RAM Caching](Database-RAMCaching.md)

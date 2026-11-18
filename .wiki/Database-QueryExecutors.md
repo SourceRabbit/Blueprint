@@ -84,8 +84,8 @@ A mixed graph can combine current SQL values with an older RAM snapshot. For exa
 
 Inside a Blueprint transaction, roots and all AutoInclude levels read SQL through the database executor, including RAM entity classes. This preserves the transaction's isolation and visibility of its uncommitted writes. Writes always go to SQL, and subsequent cache reads synchronize committed state after invalidation.
 
-Cache synchronization and query errors propagate. A failed refresh is not silently converted into a successful SQL result. SQL fallback is used for unsupported query shapes or when cache execution is unavailable, such as during a transaction. See [Transactions](Database-Transactions.md) and [RAM Caching](Database-RAM-Caching.md).
+Cache synchronization and query errors propagate. A failed refresh is not silently converted into a successful SQL result. SQL fallback is used for unsupported query shapes or when cache execution is unavailable, such as during a transaction. See [Transactions](Database-Transactions.md) and [RAM Caching](Database-RAMCaching.md).
 
 ## Related topics
 
-[Entity classes](Database-Entities-BlueprintEntity.md) · [Queries and CRUD](Database-Queries-and-CRUD.md) · [Relationships](Data-Entities-Relationships.md) · [RAM Caching](Database-RAM-Caching.md)
+[Entity classes](Entitites-BlueprintEntity.md) · [Queries and CRUD](Database-QueriesAndCRUD.md) · [Relationships](Entitites-Relationships.md) · [RAM Caching](Database-RAMCaching.md)

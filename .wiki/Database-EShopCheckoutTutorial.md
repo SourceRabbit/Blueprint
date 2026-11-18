@@ -4,7 +4,7 @@ An entity is a public, non-sealed class that derives from `BlueprintEntityDB` or
 
 This guide follows [EntitiesTutorial](../Visual%20Studio%20Project/Blueprint.Tests/Tutorial1/EntitiesTutorial.cs): create a website user, add one iPhone to the user's basket, and complete checkout. Checkout saves an order and its items, reduces product stock, and clears the purchased basket in one database transaction.
 
-Before writing code, read [Contributing](Contributing.md). Use [Getting Started](Getting-Started.md) to reference Blueprint from a .NET 10 application using C# 14. Database setup and connection settings are explained in [SQL Server](Database-SqlServer.md).
+Before writing code, read [Contributing](Contributing.md). Use [Getting Started](GettingStarted.md) to reference Blueprint from a .NET 10 application using C# 14. Database setup and connection settings are explained in [SQL Server](Database-SqlDatabase.md).
 
 ## Define a contract
 
@@ -71,7 +71,7 @@ The unique index on `BasketItem` allows only one row per `WebsiteUserID` and `Pr
 
 The following standalone `Program.cs` contains all five contracts and all helper methods. It adapts the test's `RunTest()` to `public static void Main()`, removes the `BlueprintTest` inheritance, and makes the shared fields and helpers static. Use this complete file once; the snippets in the walkthrough below explain excerpts from it.
 
-The example connects to local `SQLEXPRESS` and uses `MyEshopDatabase`, English, and Greek. Configure the connection for your environment using the [SQL Server guide](Database-SqlServer.md). Product's `BlueprintEntityRAM` base class also requires the [SQL Server caching setup](Database-RAM-Caching.md#sql-server-requirements).
+The example connects to local `SQLEXPRESS` and uses `MyEshopDatabase`, English, and Greek. Configure the connection for your environment using the [SQL Server guide](Database-SqlDatabase.md). Product's `BlueprintEntityRAM` base class also requires the [SQL Server caching setup](Database-RAMCaching.md#sql-server-requirements).
 
 Each execution inserts three new sample products and a new user, then purchases the iPhone 15 inserted by that execution. The tutorial does not reuse an existing customer or deduplicate SKUs. Prices and quantities are demonstration values.
 
@@ -640,7 +640,7 @@ The example propagates checkout errors. Calling checkout again after a confirmed
 
 Relationships are not saved as an implicit graph. Each order, order item, product update, and basket deletion is explicitly queued. New parents must be inserted before dependent rows that reference them.
 
-Direct Entity API calls, such as the initial `WebsiteUser.Insert(user)`, save explicitly. Use the transaction factory when several changes must succeed or fail together. There is no separate consumer `SaveChanges()` step. See [Relationships](Data-Entities-Relationships.md) and [Transactions](Database-Transactions.md).
+Direct Entity API calls, such as the initial `WebsiteUser.Insert(user)`, save explicitly. Use the transaction factory when several changes must succeed or fail together. There is no separate consumer `SaveChanges()` step. See [Relationships](Entitites-Relationships.md) and [Transactions](Database-Transactions.md).
 
 ## IDs
 
@@ -729,4 +729,4 @@ Keep transaction callbacks synchronous and use the queued operations. Do not sta
 
 ## Related topics
 
-[SQL Server](Database-SqlServer.md) · [Transactions](Database-Transactions.md) · [Relationships](Data-Entities-Relationships.md) · [Queries and CRUD](Database-Queries-and-CRUD.md) · [Data Annotations](Entitites-DataAnnotations.md) · [Multilingual Entities](Database-Multilingual-Entities.md) · [RAM Caching](Database-RAM-Caching.md)
+[SQL Server](Database-SqlDatabase.md) · [Transactions](Database-Transactions.md) · [Relationships](Entitites-Relationships.md) · [Queries and CRUD](Database-QueriesAndCRUD.md) · [Data Annotations](Entitites-DataAnnotations.md) · [Multilingual Entities](Entitites-MultilingualEntities.md) · [RAM Caching](Database-RAMCaching.md)

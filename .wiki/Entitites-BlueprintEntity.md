@@ -9,9 +9,9 @@
 
 Define a public, non-sealed class deriving from one of these two classes and mark it with `[Entity]`. The class can be abstract. Blueprint generates a concrete subclass when the contract is registered; continue to obtain instances through `Product.Create()` or the corresponding Entity API. Direct `new Product()` does not create the generated multilingual implementation and is not supported for persistence.
 
-Both base classes use the same CRUD, transaction, translation, relationship, and concurrency APIs. Cache selection follows class inheritance, including intermediate base classes. The `[RAMCached]` annotation has been removed. See [RAM Caching](Database-RAM-Caching.md) for synchronization and `AutoInclude` dependencies.
+Both base classes use the same CRUD, transaction, translation, relationship, and concurrency APIs. Cache selection follows class inheritance, including intermediate base classes. The `[RAMCached]` annotation has been removed. See [RAM Caching](Database-RAMCaching.md) for synchronization and `AutoInclude` dependencies.
 
-Every automatically included entity selects its own executor. A DB parent can contain a RAM child and a RAM parent can contain a DB child. `AutoInclude` requests loading; it does not change the target's data source or enable caching for DB classes. See [Query Executors](Database-Query-Executors.md) for the hierarchy, shared LINQ API, and mixed-source relationships. Transaction reads use SQL for the entire graph.
+Every automatically included entity selects its own executor. A DB parent can contain a RAM child and a RAM parent can contain a DB child. `AutoInclude` requests loading; it does not change the target's data source or enable caching for DB classes. See [Query Executors](Database-QueryExecutors.md) for the hierarchy, shared LINQ API, and mixed-source relationships. Transaction reads use SQL for the entire graph.
 
 Entity definitions, generated entity types, and the shared Entity API are organized under `Blueprint.Entities`, with public annotations in `Blueprint.Entities.Annotations`. SQL persistence stays under `Blueprint.Database.Sql`; its internal `BlueprintEntityCommands` handles inserts, updates, and deletes. This namespace separation preserves the existing SQL storage, RAM synchronization, and query behavior.
 
@@ -22,19 +22,19 @@ Entity definitions, generated entity types, and the shared Entity API are organi
 | `ID` | `long` | The primary key, stored as `bigint` in SQL Server. A new entity starts with zero; insertion assigns the generated ID to the same instance. |
 | `CurrentLanguage` | `long` | The configured language ID used when reading or assigning multilingual properties. It is not stored as a database column. |
 
-New instances use the language whose configured prefix is empty. The default language is determined by that prefix, not by a particular ID. See [Multilingual Entities](Database-Multilingual-Entities.md) for language configuration and translated properties.
+New instances use the language whose configured prefix is empty. The default language is determined by that prefix, not by a particular ID. See [Multilingual Entities](Entitites-MultilingualEntities.md) for language configuration and translated properties.
 
 ## BlueprintEntityDB
 
 Derive from `BlueprintEntityDB` for SQL reads through `QueryExecutor_Database`. Inserts, updates, and deletes also execute in SQL. These entities are not added to the RAM cache when another entity includes them; each `AutoInclude` target uses its own executor.
 
-The shared Entity API supports creation, LINQ queries, and writes. See [Queries and CRUD](Database-Queries-and-CRUD.md) and [Query Executors](Database-Query-Executors.md).
+The shared Entity API supports creation, LINQ queries, and writes. See [Queries and CRUD](Database-QueriesAndCRUD.md) and [Query Executors](Database-QueryExecutors.md).
 
 ## BlueprintEntityRAM
 
 Derive from `BlueprintEntityRAM` for eligible reads through `QueryExecutor_RAM`. SQL remains the persistent store, and SQL Server Change Tracking synchronizes committed changes into the RAM cache. Included entities continue to use their own DB or RAM source.
 
-Unsupported queries and transaction reads use SQL. The consumer uses the same Entity API as DB entities. See [RAM Caching](Database-RAM-Caching.md) for refresh intervals, SQL requirements, and consistency.
+Unsupported queries and transaction reads use SQL. The consumer uses the same Entity API as DB entities. See [RAM Caching](Database-RAMCaching.md) for refresh intervals, SQL requirements, and consistency.
 
 ## Define an entity
 
@@ -69,7 +69,7 @@ Entity class inheritance does not introduce SQL inheritance tables or discrimina
 
 ## Register and create an instance
 
-Initialize the database as described in [SQL Server](Database-SqlServer.md). Inside its lifetime, register the contract before using its Entity API. The following statements assume an active `database` and run where `CatalogItem` is in scope, with `Blueprint.Entities` imported:
+Initialize the database as described in [SQL Server](Database-SqlDatabase.md). Inside its lifetime, register the contract before using its Entity API. The following statements assume an active `database` and run where `CatalogItem` is in scope, with `Blueprint.Entities` imported:
 
 ```csharp
 database.RegisterEntity<CatalogItem>();
@@ -84,7 +84,7 @@ Registration synchronizes the entity's schema and prepares any configured cache.
 
 Calls such as `CatalogItem.Create()`, `CatalogItem.Where(...)`, and `CatalogItem.Insert(...)` are supplied by `BlueprintEntityQueries` through the `Blueprint.Entities` namespace. They use the active database and require the entity contract to be registered.
 
-Changing a loaded object's properties does not save it automatically. Use `Update(...)` or a transaction to persist changes. See [Queries and CRUD](Database-Queries-and-CRUD.md) and [Transactions](Database-Transactions.md) for reads and writes.
+Changing a loaded object's properties does not save it automatically. Use `Update(...)` or a transaction to persist changes. See [Queries and CRUD](Database-QueriesAndCRUD.md) and [Transactions](Database-Transactions.md) for reads and writes.
 
 ## Migrating existing entities
 
@@ -110,4 +110,4 @@ The Entity API calls stay the same. With unchanged names and mappings, this migr
 
 ## Related topics
 
-[SQL Server](Database-SqlServer.md) · [Data Annotations](Entitites-DataAnnotations.md) · [Relationships](Data-Entities-Relationships.md) · [Multilingual Entities](Database-Multilingual-Entities.md) · [EShop - Checkout Tutorial](Database-Tutorial-EShop-Checkout.md) · [User manual](README.md)
+[SQL Server](Database-SqlDatabase.md) · [Data Annotations](Entitites-DataAnnotations.md) · [Relationships](Entitites-Relationships.md) · [Multilingual Entities](Entitites-MultilingualEntities.md) · [EShop - Checkout Tutorial](Database-EShopCheckoutTutorial.md) · [User manual](README.md)

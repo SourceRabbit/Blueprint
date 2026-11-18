@@ -25,7 +25,7 @@ The language with the empty prefix is the default. Blueprint does not infer a lo
 
 ## Declare translated fields
 
-The [Product contract](Database-Tutorial-EShop-Checkout.md#define-a-contract) declares:
+The [Product contract](Database-EShopCheckoutTutorial.md#define-a-contract) declares:
 
 ```csharp
 [Multilingual, MaxLength(200)]
@@ -120,7 +120,7 @@ The same resolution rules apply to materialized entities, related entities, SQL 
 List<string?> titles = Product.Where(item => item.Title == "Camera", 2).Select(item => item.Title).ToList();
 ```
 
-SQL and RAM use the same fallback rules; ordinary comparison and sorting semantics still follow their respective providers, as described in [RAM Caching](Database-RAM-Caching.md#queries-and-sql-fallback). Queries inside a transaction continue to read SQL directly. Unknown language IDs remain invalid. Adding or removing this annotation changes read behavior without adding columns or modifying existing translations.
+SQL and RAM use the same fallback rules; ordinary comparison and sorting semantics still follow their respective providers, as described in [RAM Caching](Database-RAMCaching.md#queries-and-sql-fallback). Queries inside a transaction continue to read SQL directly. Unknown language IDs remain invalid. Adding or removing this annotation changes read behavior without adding columns or modifying existing translations.
 
 ## Required translations and configuration changes
 
@@ -130,8 +130,8 @@ An explicit `[Required]` requires a value for every configured translation. Non-
 
 The database copies and validates its language configuration during construction. Mutating the original list has no effect. Read the configuration through `database.Languages`. To change languages, stop background work that uses the database, dispose the current database, create one with the new configuration, and register its contracts. Re-query entities from that model.
 
-Adding a language may add SQL columns during registration. A new required translation on populated data needs an explicit default or migration. Removing a language does not automatically delete its old columns. See [Schema Synchronization](Database-Entities-Schema-Synchronization.md).
+Adding a language may add SQL columns during registration. A new required translation on populated data needs an explicit default or migration. Removing a language does not automatically delete its old columns. See [Schema Synchronization](Database-SchemaSynchronization.md).
 
 ## Related topics
 
-[Getting Started](Getting-Started.md) · [Data Annotations](Entitites-DataAnnotations.md) · [Queries and CRUD](Database-Queries-and-CRUD.md) · [Schema Synchronization](Database-Entities-Schema-Synchronization.md)
+[Getting Started](GettingStarted.md) · [Data Annotations](Entitites-DataAnnotations.md) · [Queries and CRUD](Database-QueriesAndCRUD.md) · [Schema Synchronization](Database-SchemaSynchronization.md)

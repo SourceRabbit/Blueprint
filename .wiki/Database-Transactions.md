@@ -21,7 +21,7 @@ Import `Blueprint.Database.TransactionFactory` for `TransactionFactory` and `Dat
 
 ## Insert, update, and delete together
 
-This example assumes the [Product contract](Database-Tutorial-EShop-Checkout.md#define-a-contract), an active `database`, and two different existing IDs supplied by the application.
+This example assumes the [Product contract](Database-EShopCheckoutTutorial.md#define-a-contract), an active `database`, and two different existing IDs supplied by the application.
 
 ```csharp
 using Blueprint.Entities;
@@ -48,7 +48,7 @@ The reads in this example happen **before** execution. When reads must share the
 
 `AddInsert`, `AddUpdate`, and `AddDelete` only register operations. They retain entity references, not copies of values at registration time. Finish editing before submission and do not change those objects while execution is pending.
 
-Operations run in registration order. Each entity must come from the active registered model. Updates and deletes require a positive ID and fail if the target row is missing. Navigation graphs are not saved implicitly; add every intended write. Insert parents before children, and delete children before parents. See [Relationships](Data-Entities-Relationships.md#insert-a-parent-and-child-together).
+Operations run in registration order. Each entity must come from the active registered model. Updates and deletes require a positive ID and fail if the target row is missing. Navigation graphs are not saved implicitly; add every intended write. Insert parents before children, and delete children before parents. See [Relationships](Entitites-Relationships.md#insert-a-parent-and-child-together).
 
 ## Validate before commit
 
@@ -158,4 +158,4 @@ Queries inside a transaction use SQL so they see its uncommitted writes. Bluepri
 
 ## Related topics
 
-[Queries and CRUD](Database-Queries-and-CRUD.md) · [Relationships](Data-Entities-Relationships.md) · [Data Annotations](Entitites-DataAnnotations.md#concurrency) · [RAM Caching](Database-RAM-Caching.md)
+[Queries and CRUD](Database-QueriesAndCRUD.md) · [Relationships](Entitites-Relationships.md) · [Data Annotations](Entitites-DataAnnotations.md#concurrency) · [RAM Caching](Database-RAMCaching.md)

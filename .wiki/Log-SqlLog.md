@@ -1,12 +1,12 @@
 # SqlLog
 
-`SqlLog` is the SQL Server implementation of the abstract `BlueprintLog` class. Both classes belong to the `Blueprint.Log` namespace. See [BlueprintLog](BlueprintLog.md) for the shared API, log levels, and `LogEntry` result type.
+`SqlLog` is the SQL Server implementation of the abstract `BlueprintLog` class. Both classes belong to the `Blueprint.Log` namespace. See [BlueprintLog](Log-BlueprintLog.md) for the shared API, log levels, and `LogEntry` result type.
 
-This page covers SQL Server initialization, writing and reading events, counting and pagination, deleting old events, the SQL table, and execution behavior. These storage and connection details apply to `SqlLog`; see [MySqlLog (Coming Soon)](MySqlLog.md) for the planned MySQL implementation.
+This page covers SQL Server initialization, writing and reading events, counting and pagination, deleting old events, the SQL table, and execution behavior. These storage and connection details apply to `SqlLog`; see [MySqlLog (Coming Soon)](Log-MySqlLog.md) for the planned MySQL implementation.
 
 ## Create a SQL log
 
-Add a Blueprint reference and its dependencies as described in [Getting Started](Getting-Started.md). `SqlLog` is independent of `BlueprintDatabase`: it does not require an active entity database, entity registration, or NLog configuration.
+Add a Blueprint reference and its dependencies as described in [Getting Started](GettingStarted.md). `SqlLog` is independent of `BlueprintDatabase`: it does not require an active entity database, entity registration, or NLog configuration.
 
 This complete console example creates the log database and table if they are missing, then writes two events:
 
@@ -124,7 +124,7 @@ foreach (LogEntry entry in machineErrors)
 
 Results are fully materialized before the connection is returned to the pool. An empty result is an empty list, never `null`. These unpaged overloads have no implicit row limit; use the paged overloads below when displaying results in a grid. Ordering follows insertion IDs, including when multiple events share the same whole-second timestamp or existing rows have timestamps out of insertion order.
 
-Each result is an immutable [LogEntry](BlueprintLog.md#logentry). The exception property contains stored text, and later database writes do not change an already returned snapshot. An unrecognized stored level throws `InvalidOperationException`; SQL failures propagate instead of being reported as an empty result.
+Each result is an immutable [LogEntry](Log-BlueprintLog.md#logentry). The exception property contains stored text, and later database writes do not change an already returned snapshot. An unrecognized stored level throws `InvalidOperationException`; SQL failures propagate instead of being reported as an empty result.
 
 ## Count and paginate events
 
@@ -195,7 +195,7 @@ Like log writes, deletion does not enlist in an ambient application transaction.
 
 ## Log levels
 
-The caller chooses an [EBlueprintLogLevel](BlueprintLog.md#log-levels). `SqlLog` stores its name, such as `Error`, rather than its numeric enum value. All defined levels are written; there is no minimum-level filter. Casting an undefined numeric value to the enum results in an `ArgumentOutOfRangeException` when writing or filtering reads and counts.
+The caller chooses an [EBlueprintLogLevel](Log-BlueprintLog.md#log-levels). `SqlLog` stores its name, such as `Error`, rather than its numeric enum value. All defined levels are written; there is no minimum-level filter. Casting an undefined numeric value to the enum results in an `ArgumentOutOfRangeException` when writing or filtering reads and counts.
 
 ## SQL table
 
@@ -235,4 +235,4 @@ There is no automatic retention policy. Call `DeleteFromLog` explicitly when cle
 
 ## Related topics
 
-[BlueprintLog](BlueprintLog.md) · [Getting Started](Getting-Started.md) · [SQL Server](Database-SqlServer.md) · [Transactions](Database-Transactions.md) · [Contributing](Contributing.md)
+[BlueprintLog](Log-BlueprintLog.md) · [Getting Started](GettingStarted.md) · [SQL Server](Database-SqlDatabase.md) · [Transactions](Database-Transactions.md) · [Contributing](Contributing.md)

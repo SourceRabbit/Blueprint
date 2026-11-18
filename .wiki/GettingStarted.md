@@ -11,11 +11,11 @@ This guide explains how to add Blueprint to your .NET project, either through a 
 - An accessible SQL Server instance when running database operations.
 - SQL permissions to access data and, when needed, create the database or synchronize its schema.
 
-Blueprint currently provides SQL Server support through `SqlDatabase`. See [SQL Server](Database-SqlServer.md) for connection settings, registration, and application lifetime.
+Blueprint currently provides SQL Server support through `SqlDatabase`. See [SQL Server](Database-SqlDatabase.md) for connection settings, registration, and application lifetime.
 
-Entities are public, non-sealed classes derived from `BlueprintEntityDB` or `BlueprintEntityRAM`, with `[Entity]` on each registered class. Both persist in SQL; the RAM base also enables synchronized caching. Existing interface-based entities must be migrated and consumers rebuilt. See [entity class requirements and migration](Database-Entities-BlueprintEntity.md#migrating-existing-entities).
+Entities are public, non-sealed classes derived from `BlueprintEntityDB` or `BlueprintEntityRAM`, with `[Entity]` on each registered class. Both persist in SQL; the RAM base also enables synchronized caching. Existing interface-based entities must be migrated and consumers rebuilt. See [entity class requirements and migration](Entitites-BlueprintEntity.md#migrating-existing-entities).
 
-Import `Blueprint.Entities` for entity classes and their static API, and `Blueprint.Entities.Annotations` for Blueprint annotations. Consumers upgrading from the former entity namespaces must update their imports and rebuild; see [namespace migration](Database-Entities-BlueprintEntity.md#updating-namespace-imports).
+Import `Blueprint.Entities` for entity classes and their static API, and `Blueprint.Entities.Annotations` for Blueprint annotations. Consumers upgrading from the former entity namespaces must update their imports and rebuild; see [namespace migration](Entitites-BlueprintEntity.md#updating-namespace-imports).
 
 ## Prepare your project
 
@@ -58,7 +58,7 @@ When replacing the DLL, check the dependency versions required by that library b
 
 ## Next steps
 
-- [SQL Server](Database-SqlServer.md): configure the connection, register entities, and manage application lifetime.
-- [EShop - Checkout Tutorial](Database-Tutorial-EShop-Checkout.md): follow a complete example from user and basket creation to transactional checkout, order persistence, and stock reduction.
+- [SQL Server](Database-SqlDatabase.md): configure the connection, register entities, and manage application lifetime.
+- [EShop - Checkout Tutorial](Database-EShopCheckoutTutorial.md): follow a complete example from user and basket creation to transactional checkout, order persistence, and stock reduction.
 - [Transactions](Database-Transactions.md): group writes and validation with automatic commit or rollback.
 - [Troubleshooting](Troubleshooting.md): resolve common setup, mapping, and persistence errors.
