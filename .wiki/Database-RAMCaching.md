@@ -104,6 +104,22 @@ Full entities with `AutoInclude` load each relationship through its target's exe
 
 Queries inside an application transaction always use SQL so they see its uncommitted writes.
 
+### Compiled query plans
+
+For eligible RAM queries, `TryCreatePage` reuses the compiled selection for a `Where` filter, ordering, and `Skip` or `Take`. It maps entity properties to the selected language, then builds a cache key from the structure of the expression. Typed argument slots stand in for literal values and captured variables. Changing an ID, price threshold, or page offset can therefore reuse the same plan. Adding an `OrderBy` changes the shape and uses a separate plan.
+
+```csharp
+foreach (long productID in new long[] { 1, 22 })
+{
+    Product? product = Product.Where(item => item.ID == productID).SingleOrDefault();
+    Console.WriteLine(product?.SKU);
+}
+```
+
+On the first lookup, Blueprint compiles the ID filter and stores the resulting delegate. The second lookup reuses it with `22`. Concurrent requests can share that delegate because each execution supplies its own arguments. Both lookups evaluate the filter against the current RAM snapshot, so a cache hit saves compilation and still reads the matching product.
+
+Each cached table keeps up to **256 compiled query shapes**. When a new shape arrives at capacity, it replaces the earliest inserted plan. This limit applies only to compiled plans. The table snapshot keeps its rows.
+
 ## Independent returned objects
 
 Normal queries return copies of entities, keeping consumer changes separate from cached values:
