@@ -1,4 +1,3 @@
-using Blueprint.Database.Contexts;
 using System.Linq.Expressions;
 
 namespace Blueprint.Database.Queries.QueryExecutors
@@ -25,7 +24,7 @@ namespace Blueprint.Database.Queries.QueryExecutors
         /// <param name="result">The result when execution is supported, including null or zero.</param>
         /// <returns>True if the query executed; otherwise false. Execution failures propagate as exceptions.</returns>
         /// <exception cref="Exception">Query translation, synchronization, or execution fails.</exception>
-        internal abstract bool TryExecute<TResult>(EntityContext context, Expression expression, out TResult result);
+        internal abstract bool TryExecute<TResult>(BlueprintDatabaseContext context, Expression expression, out TResult result);
 
         /// <summary>Materializes the complete result list or indicates that the next executor is required.</summary>
         /// <typeparam name="TElement">The type of each result.</typeparam>
@@ -34,7 +33,7 @@ namespace Blueprint.Database.Queries.QueryExecutors
         /// <param name="items">The results when execution is supported, including an empty list.</param>
         /// <returns>True if the query executed; otherwise false. Execution failures propagate as exceptions.</returns>
         /// <exception cref="Exception">Query translation, synchronization, or materialization fails.</exception>
-        internal abstract bool TryExecuteList<TElement>(EntityContext context, Expression expression, out List<TElement>? items);
+        internal abstract bool TryExecuteList<TElement>(BlueprintDatabaseContext context, Expression expression, out List<TElement>? items);
 
         /// <summary>Replaces the original query root with the selected executor's data source.</summary>
         protected sealed class EntityRoot : ExpressionVisitor

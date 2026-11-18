@@ -2,7 +2,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Blueprint.Database.Entities;
 using Blueprint.Database.Queries;
-using Blueprint.Database.Contexts;
 using Blueprint.Database.Sql.RAMCache;
 using DatabaseTransactionFactory = Blueprint.Database.TransactionFactory.TransactionFactory;
 using Blueprint.Fundamentals;
@@ -18,7 +17,7 @@ namespace Blueprint.Database
         private readonly string fName;
         private readonly string fConnectionString;
         private readonly HashSet<Type> fEntityTypes = new();
-        private EntityContext? fContext;
+        private BlueprintDatabaseContext? fContext;
         private bool fModelChanged = true;
         private readonly IReadOnlyList<BlueprintLanguage> fLanguages;
         private readonly DatabaseTransactionFactory fTransactionFactory;
@@ -178,7 +177,7 @@ namespace Blueprint.Database
         /// <typeparam name="TResult">The result type.</typeparam>
         /// <param name="execute">The operation on the context.</param>
         /// <returns>The operation result.</returns>
-        internal TResult ExecuteOperation<TResult>(Func<EntityContext, TResult> execute)
+        internal TResult ExecuteOperation<TResult>(Func<BlueprintDatabaseContext, TResult> execute)
         {
             lock (fSyncRoot)
             {
@@ -215,7 +214,7 @@ namespace Blueprint.Database
         /// <param name="context">The active context.</param>
         /// <returns>The generated class.</returns>
         /// <exception cref="InvalidOperationException">The entity must be registered and initialized.</exception>
-        internal static Type ResolveType<TEntity>(EntityContext context) where TEntity : class, BlueprintEntity
+        internal static Type ResolveType<TEntity>(BlueprintDatabaseContext context) where TEntity : class, BlueprintEntity
         {
             return context.EntityTypes.Types.TryGetValue(typeof(TEntity), out Type? type) ? type : throw new InvalidOperationException($"Entity '{typeof(TEntity)}' is not registered. Call RegisterEntity() first.");
         }
@@ -239,7 +238,7 @@ namespace Blueprint.Database
                     return;
                 }
                 options.ReplaceService<IModelCacheKeyFactory, EntityModelCacheKey>();
-                EntityContext candidate = new EntityContext(options.Options, new BlueprintEntityTypes(fEntityTypes, fLanguages));
+                BlueprintDatabaseContext candidate = new BlueprintDatabaseContext(options.Options, new BlueprintEntityTypes(fEntityTypes, fLanguages));
                 try
                 {
                     _ = candidate.Model;
@@ -360,7 +359,7 @@ namespace Blueprint.Database
         }
 
         /// <summary>The successfully initialized context.</summary>
-        internal EntityContext Context
+        internal BlueprintDatabaseContext Context
         {
             get
             {

@@ -1,4 +1,3 @@
-using Blueprint.Database.Contexts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -72,7 +71,7 @@ namespace Blueprint.Database.Sql
         /// <returns>The EF mappings of the selected entities.</returns>
         private static IEnumerable<IEntityType> GetCachedTypes(DbContext context)
         {
-            EntityContext entityContext = (EntityContext)context;
+            BlueprintDatabaseContext entityContext = (BlueprintDatabaseContext)context;
             return entityContext.EntityTypes.GetRAMCachedContracts().Select(contract => context.Model.FindEntityType(entityContext.EntityTypes.Types[contract])!);
         }
     }

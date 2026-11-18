@@ -1,5 +1,4 @@
 using Blueprint.Database.Entities;
-using Blueprint.Database.Contexts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using System.Data;
@@ -12,7 +11,7 @@ namespace Blueprint.Database.Sql.RAMCache
     internal sealed class SqlEntityCache : IDisposable
     {
         private readonly SqlDatabase fDatabase;
-        private readonly EntityContext fContext;
+        private readonly BlueprintDatabaseContext fContext;
         private readonly Dictionary<Type, RAMCachedTable> fRAMCachedTables = new Dictionary<Type, RAMCachedTable>();
         private readonly Timer fTimer;
         private TimeSpan fRefreshInterval;
@@ -27,7 +26,7 @@ namespace Blueprint.Database.Sql.RAMCache
         /// <param name="refreshInterval">The interval for checking external changes.</param>
         /// <exception cref="DbException">The initial data load fails.</exception>
         /// <exception cref="InvalidOperationException">An application transaction is active or Change Tracking is not enabled.</exception>
-        internal SqlEntityCache(SqlDatabase database, EntityContext context, TimeSpan refreshInterval)
+        internal SqlEntityCache(SqlDatabase database, BlueprintDatabaseContext context, TimeSpan refreshInterval)
         {
             fDatabase = database;
             fContext = context;

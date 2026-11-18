@@ -3,7 +3,6 @@ using System.Reflection;
 using Blueprint.Database.Queries.QueryExecutors;
 using Blueprint.Database.Queries.QueryExecutors.RAMCache;
 using Blueprint.Database.Queries.QueryExecutors.Sql;
-using Blueprint.Database.Contexts;
 
 namespace Blueprint.Database.Queries
 {
@@ -19,7 +18,7 @@ namespace Blueprint.Database.Queries
         /// <param name="contract">The root entity interface.</param>
         /// <param name="queryFactory">The function that creates the root with optional automatic relationships.</param>
         /// <param name="language">The language of the filters and results.</param>
-        internal EntityQueryProvider(BlueprintDatabase database, Type contract, Func<EntityContext, bool, IQueryable> queryFactory, long language)
+        internal EntityQueryProvider(BlueprintDatabase database, Type contract, Func<BlueprintDatabaseContext, bool, IQueryable> queryFactory, long language)
         {
             fDatabase = database;
             fLanguage = language;

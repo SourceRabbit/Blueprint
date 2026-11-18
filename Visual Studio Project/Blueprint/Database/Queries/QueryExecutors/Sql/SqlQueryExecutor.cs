@@ -1,4 +1,3 @@
-using Blueprint.Database.Contexts;
 using Blueprint.Database.Entities;
 using System.Linq.Expressions;
 
@@ -7,13 +6,13 @@ namespace Blueprint.Database.Queries.QueryExecutors.Sql
     /// <summary>Translates and executes queries through EF Core while preserving the language and visitor order.</summary>
     internal sealed class SqlQueryExecutor : AbstractQueryExecutor
     {
-        private readonly Func<EntityContext, bool, IQueryable> fQueryFactory;
+        private readonly Func<BlueprintDatabaseContext, bool, IQueryable> fQueryFactory;
 
         /// <summary>Stores the factory that creates an EF root from each execution's active context.</summary>
         /// <param name="queryFactory">The factory that creates the root with optional relationship loading.</param>
         /// <param name="provider">The provider that owns the original expression.</param>
         /// <param name="language">The language ID used by filters and results.</param>
-        internal SqlQueryExecutor(Func<EntityContext, bool, IQueryable> queryFactory, IQueryProvider provider, long language) : base(provider, language)
+        internal SqlQueryExecutor(Func<BlueprintDatabaseContext, bool, IQueryable> queryFactory, IQueryProvider provider, long language) : base(provider, language)
         {
             fQueryFactory = queryFactory;
         }
@@ -25,7 +24,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.Sql
         /// <param name="result">The result returned by the EF provider.</param>
         /// <returns>True after successful execution. Failures propagate as exceptions.</returns>
         /// <exception cref="Exception">Root creation, query translation, or execution fails.</exception>
-        internal override bool TryExecute<TResult>(EntityContext context, Expression expression, out TResult result)
+        internal override bool TryExecute<TResult>(BlueprintDatabaseContext context, Expression expression, out TResult result)
         {
             bool includeRelated = typeof(BlueprintEntity).IsAssignableFrom(typeof(TResult));
             IQueryable root = fQueryFactory(context, includeRelated);
@@ -49,7 +48,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.Sql
         /// <param name="items">The result list returned by the EF provider.</param>
         /// <returns>True after successful materialization. Failures propagate as exceptions.</returns>
         /// <exception cref="Exception">Root creation, query translation, or materialization fails.</exception>
-        internal override bool TryExecuteList<TElement>(EntityContext context, Expression expression, out List<TElement>? items)
+        internal override bool TryExecuteList<TElement>(BlueprintDatabaseContext context, Expression expression, out List<TElement>? items)
         {
             bool includeRelated = typeof(BlueprintEntity).IsAssignableFrom(typeof(TElement));
             IQueryable root = fQueryFactory(context, includeRelated);

@@ -14,19 +14,19 @@ using Blueprint.Database.Entities.Annotations;
 using Blueprint.Database.Queries;
 using Blueprint.Fundamentals;
 
-namespace Blueprint.Database.Contexts
+namespace Blueprint.Database
 {
     /// <summary>Maps generated classes and interface attributes to the EF Core model.</summary>
-    internal sealed class EntityContext : DbContext
+    internal sealed class BlueprintDatabaseContext : DbContext
     {
-        private static readonly MethodInfo fQueryMethod = typeof(EntityContext).GetMethod(nameof(CreateQuery), BindingFlags.NonPublic | BindingFlags.Instance)!;
+        private static readonly MethodInfo fQueryMethod = typeof(BlueprintDatabaseContext).GetMethod(nameof(CreateQuery), BindingFlags.NonPublic | BindingFlags.Instance)!;
         private static readonly EntityMaterializer fMaterializer = new();
         private readonly BlueprintEntityTypes fEntityTypes;
 
         /// <summary>Connects a set of entities to the provider settings.</summary>
         /// <param name="options">The EF Core settings.</param>
         /// <param name="entityTypes">The types in this model.</param>
-        internal EntityContext(DbContextOptions options, BlueprintEntityTypes entityTypes) : base(options)
+        internal BlueprintDatabaseContext(DbContextOptions options, BlueprintEntityTypes entityTypes) : base(options)
         {
             fEntityTypes = entityTypes;
             QueryLanguage = entityTypes.DefaultLanguageID;
@@ -234,7 +234,7 @@ namespace Blueprint.Database.Contexts
         /// <returns>The same instance with the selected language.</returns>
         public object InitializedInstance(MaterializationInterceptionData materializationData, object entity)
         {
-            if (entity is BlueprintEntity value && materializationData.Context is EntityContext context)
+            if (entity is BlueprintEntity value && materializationData.Context is BlueprintDatabaseContext context)
             {
                 value.CurrentLanguage = context.QueryLanguage;
             }
@@ -251,7 +251,7 @@ namespace Blueprint.Database.Contexts
         /// <returns>The model cache key.</returns>
         public object Create(DbContext context, bool designTime)
         {
-            return (context.GetType(), ((EntityContext)context).EntityTypes.ModelKey, designTime);
+            return (context.GetType(), ((BlueprintDatabaseContext)context).EntityTypes.ModelKey, designTime);
         }
     }
 }

@@ -1,6 +1,5 @@
 using Blueprint.Database.Entities;
 using Blueprint.Database.Entities.Annotations;
-using Blueprint.Database.Contexts;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -14,7 +13,7 @@ namespace Blueprint.Database.Sql.RAMCache
     /// <summary>Stores a table's committed scalar values and corresponding synchronization position.</summary>
     internal sealed class RAMCachedTable
     {
-        private readonly EntityContext fContext;
+        private readonly BlueprintDatabaseContext fContext;
         private readonly Type fConcreteType;
         private readonly IProperty[] fProperties;
         private readonly (INavigation Navigation, Type Contract)[] fAutoIncludes;
@@ -22,7 +21,7 @@ namespace Blueprint.Database.Sql.RAMCache
         private readonly Dictionary<IProperty, ILookup<object?, BlueprintEntity>> fForeignKeyIndexes = new Dictionary<IProperty, ILookup<object?, BlueprintEntity>>();
         private readonly string fTableName;
         private readonly string fKeyColumn;
-        private readonly Func<EntityContext, string, object[], List<BlueprintEntity>> fReadRows;
+        private readonly Func<BlueprintDatabaseContext, string, object[], List<BlueprintEntity>> fReadRows;
         private Dictionary<long, BlueprintEntity> fRows = new Dictionary<long, BlueprintEntity>();
         private long? fVersion;
         private long fBeginVersion;
@@ -33,7 +32,7 @@ namespace Blueprint.Database.Sql.RAMCache
         /// <param name="contract">The explicitly or implicitly cached interface.</param>
         /// <param name="tables">The shared table registry, completed before any row is copied.</param>
         /// <exception cref="InvalidOperationException">An AutoInclude property is not a mapped navigation.</exception>
-        internal RAMCachedTable(EntityContext context, Type contract, IReadOnlyDictionary<Type, RAMCachedTable> tables)
+        internal RAMCachedTable(BlueprintDatabaseContext context, Type contract, IReadOnlyDictionary<Type, RAMCachedTable> tables)
         {
             fContext = context;
             fConcreteType = context.EntityTypes.Types[contract];
@@ -45,7 +44,7 @@ namespace Blueprint.Database.Sql.RAMCache
             fTableName = sqlHelper.DelimitIdentifier(entityType.GetTableName()!, entityType.GetSchema());
             StoreObjectIdentifier store = StoreObjectIdentifier.Table(entityType.GetTableName()!, entityType.GetSchema());
             fKeyColumn = sqlHelper.DelimitIdentifier(entityType.FindPrimaryKey()!.Properties.Single().GetColumnName(store)!);
-            fReadRows = typeof(RAMCachedTable).GetMethod(nameof(ReadRows), BindingFlags.NonPublic | BindingFlags.Static)!.MakeGenericMethod(fConcreteType).CreateDelegate<Func<EntityContext, string, object[], List<BlueprintEntity>>>();
+            fReadRows = typeof(RAMCachedTable).GetMethod(nameof(ReadRows), BindingFlags.NonPublic | BindingFlags.Static)!.MakeGenericMethod(fConcreteType).CreateDelegate<Func<BlueprintDatabaseContext, string, object[], List<BlueprintEntity>>>();
         }
 
         /// <summary>Prepares a new snapshot using a delta or a full reload when the previous version is no longer valid.</summary>
@@ -237,7 +236,7 @@ namespace Blueprint.Database.Sql.RAMCache
         /// <param name="sql">The SQL with safely delimited identifiers.</param>
         /// <param name="parameters">The Change Tracking parameters.</param>
         /// <returns>The stored rows without tracking or relationships.</returns>
-        private static List<BlueprintEntity> ReadRows<TEntity>(EntityContext context, string sql, object[] parameters) where TEntity : class, BlueprintEntity
+        private static List<BlueprintEntity> ReadRows<TEntity>(BlueprintDatabaseContext context, string sql, object[] parameters) where TEntity : class, BlueprintEntity
         {
             return context.Set<TEntity>().FromSqlRaw(sql, parameters).AsNoTracking().ToList().Cast<BlueprintEntity>().ToList();
         }

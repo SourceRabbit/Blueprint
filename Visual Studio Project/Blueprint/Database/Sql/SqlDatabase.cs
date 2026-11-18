@@ -5,7 +5,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Data.SqlClient;
 using Blueprint.Database.Entities.Annotations;
 using Blueprint.Database.Sql.RAMCache;
-using Blueprint.Database.Contexts;
 using Blueprint.Fundamentals;
 
 namespace Blueprint.Database.Sql
@@ -178,7 +177,7 @@ namespace Blueprint.Database.Sql
                     {
                         SqlChangeTracking.InitializeDatabase(context);
                         SqlSchemaInitializer.Initialize(context);
-                        EntityContext entityContext = (EntityContext)context;
+                        BlueprintDatabaseContext entityContext = (BlueprintDatabaseContext)context;
                         cache = entityContext.EntityTypes.Types.Keys.Any(contract => contract.IsDefined(typeof(RAMCached), false)) ? new SqlEntityCache(this, entityContext, RAMCacheRefreshInterval) : null;
                     });
                 }

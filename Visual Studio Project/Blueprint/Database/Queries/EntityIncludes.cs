@@ -1,6 +1,5 @@
 using Blueprint.Database.Entities.Annotations;
 using Blueprint.Database.Entities;
-using Blueprint.Database.Contexts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 
@@ -14,7 +13,7 @@ namespace Blueprint.Database.Queries
         /// <param name="context">The query context.</param>
         /// <param name="query">The original query.</param>
         /// <returns>The query with its Includes.</returns>
-        internal static IQueryable<TEntity> Apply<TEntity>(EntityContext context, IQueryable<TEntity> query) where TEntity : class
+        internal static IQueryable<TEntity> Apply<TEntity>(BlueprintDatabaseContext context, IQueryable<TEntity> query) where TEntity : class
         {
             foreach (var path in GetPaths(context, context.Model.FindEntityType(typeof(TEntity))!, string.Empty, new HashSet<Type>()))
             {
@@ -30,7 +29,7 @@ namespace Blueprint.Database.Queries
         /// <param name="ancestors">The types already visited.</param>
         /// <returns>The loading paths.</returns>
         /// <exception cref="InvalidOperationException">AutoInclude refers to an unmapped relationship.</exception>
-        private static IEnumerable<string> GetPaths(EntityContext context, IEntityType entityType, string prefix, HashSet<Type> ancestors)
+        private static IEnumerable<string> GetPaths(BlueprintDatabaseContext context, IEntityType entityType, string prefix, HashSet<Type> ancestors)
         {
             if (!ancestors.Add(entityType.ClrType))
             {

@@ -1,5 +1,4 @@
 using Blueprint.Database.Entities;
-using Blueprint.Database.Contexts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -95,7 +94,7 @@ namespace Blueprint.Database.TransactionFactory
                     lock (fSyncRoot)
                     {
                         cancellationToken.ThrowIfCancellationRequested();
-                        EntityContext context = fDatabase.Context;
+                        BlueprintDatabaseContext context = fDatabase.Context;
                         if (context.Database.CurrentTransaction != null)
                         {
                             throw new InvalidOperationException("The database already has an active transaction.");
@@ -147,7 +146,7 @@ namespace Blueprint.Database.TransactionFactory
         /// <param name="operations">The fixed snapshot of operations.</param>
         /// <returns>The original values, comparing entities by reference.</returns>
         /// <exception cref="ArgumentException">An entity was not created by the active model.</exception>
-        private static Dictionary<BlueprintEntity, Dictionary<IProperty, object?>> CaptureTransactionValues(EntityContext context, IReadOnlyList<DatabaseTransaction.Operation> operations)
+        private static Dictionary<BlueprintEntity, Dictionary<IProperty, object?>> CaptureTransactionValues(BlueprintDatabaseContext context, IReadOnlyList<DatabaseTransaction.Operation> operations)
         {
             Dictionary<BlueprintEntity, Dictionary<IProperty, object?>> snapshots = new Dictionary<BlueprintEntity, Dictionary<IProperty, object?>>(ReferenceEqualityComparer.Instance);
             foreach (DatabaseTransaction.Operation operation in operations)
@@ -181,7 +180,7 @@ namespace Blueprint.Database.TransactionFactory
         /// <exception cref="ArgumentException">The ID is incompatible with the operation.</exception>
         /// <exception cref="InvalidOperationException">A reference has not been persisted or has an incompatible foreign key.</exception>
         /// <exception cref="DbUpdateException">The write failed or the target row no longer exists.</exception>
-        private static int ExecuteTransactionOperation(EntityContext context, DatabaseTransaction.Operation operation)
+        private static int ExecuteTransactionOperation(BlueprintDatabaseContext context, DatabaseTransaction.Operation operation)
         {
             BlueprintEntity entity = operation.Entity;
             IEntityType entityType = context.Model.FindEntityType(entity.GetType())!;

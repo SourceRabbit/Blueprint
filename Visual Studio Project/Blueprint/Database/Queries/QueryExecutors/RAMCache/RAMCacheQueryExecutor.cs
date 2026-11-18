@@ -1,6 +1,5 @@
 using System.Collections;
 using Blueprint.Database.Sql.RAMCache;
-using Blueprint.Database.Contexts;
 using Blueprint.Database.Entities;
 using System.Linq.Expressions;
 
@@ -30,7 +29,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAMCache
         /// <param name="result">The cached result when the query is supported.</param>
         /// <returns>True if the query executed in RAM; otherwise false to allow SQL execution.</returns>
         /// <exception cref="Exception">Cache synchronization or query execution fails.</exception>
-        internal override bool TryExecute<TResult>(EntityContext context, Expression expression, out TResult result)
+        internal override bool TryExecute<TResult>(BlueprintDatabaseContext context, Expression expression, out TResult result)
         {
             if (TryExecuteCount(context, expression, out object? count))
             {
@@ -60,7 +59,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAMCache
         /// <param name="items">The independent results when the cache supports the query.</param>
         /// <returns>True if the query executed in RAM; otherwise false to allow SQL execution.</returns>
         /// <exception cref="Exception">Cache synchronization or query materialization fails.</exception>
-        internal override bool TryExecuteList<TElement>(EntityContext context, Expression expression, out List<TElement>? items)
+        internal override bool TryExecuteList<TElement>(BlueprintDatabaseContext context, Expression expression, out List<TElement>? items)
         {
             items = null;
             bool includeRelated = typeof(BlueprintEntity).IsAssignableFrom(typeof(TElement));
@@ -114,7 +113,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAMCache
         /// <param name="context">The active context, with the database lock already held.</param>
         /// <param name="count">The result as an int or long when counting completes.</param>
         /// <returns>True if safe counting without copies is supported.</returns>
-        private bool TryExecuteCount(EntityContext context, Expression expression, out object? count)
+        private bool TryExecuteCount(BlueprintDatabaseContext context, Expression expression, out object? count)
         {
             count = null;
             if (expression is not MethodCallExpression call || call.Method.DeclaringType != typeof(Queryable) || (call.Method.Name != nameof(Queryable.Count) && call.Method.Name != nameof(Queryable.LongCount)))
@@ -141,7 +140,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAMCache
         /// <param name="element">The independent result, or null for an empty OrDefault operation.</param>
         /// <returns>True if selection can execute without exposing shared entities.</returns>
         /// <exception cref="InvalidOperationException">First or Single has no match, or Single has multiple matches.</exception>
-        private bool TryExecuteElement(EntityContext context, Expression expression, out object? element)
+        private bool TryExecuteElement(BlueprintDatabaseContext context, Expression expression, out object? element)
         {
             element = null;
             if (expression is not MethodCallExpression call || call.Method.DeclaringType != typeof(Queryable) || call.Type != fContract || call.Arguments.Count is < 1 or > 2)
@@ -191,7 +190,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAMCache
         /// <param name="context">The active context, with the database lock already held.</param>
         /// <param name="items">The independent result copies when the query executes.</param>
         /// <returns>True if the results may be selected from shared objects.</returns>
-        private bool TryExecutePage<TElement>(RAMCachedTable table, EntityContext context, Expression expression, out List<TElement>? items)
+        private bool TryExecutePage<TElement>(RAMCachedTable table, BlueprintDatabaseContext context, Expression expression, out List<TElement>? items)
         {
             items = null;
             if (!CachedPage.TryCreate(expression, fProvider, fContract, table.ConcreteType, table.Properties, fLanguage, context.EntityTypes.DefaultLanguageID, out Func<IEnumerable<BlueprintEntity>, IEnumerable<BlueprintEntity>>? page))
@@ -214,7 +213,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAMCache
         /// <param name="context">The active context, with the database lock already held.</param>
         /// <param name="items">The independent projected results when execution succeeds.</param>
         /// <returns>True if the projection can execute without exposing mutable cached values.</returns>
-        private bool TryExecuteProjection<TElement>(RAMCachedTable table, EntityContext context, Expression expression, out List<TElement>? items)
+        private bool TryExecuteProjection<TElement>(RAMCachedTable table, BlueprintDatabaseContext context, Expression expression, out List<TElement>? items)
         {
             items = null;
             if (!CachedProjection.TryCreate<TElement>(expression, fProvider, fContract, table.ConcreteType, table.Properties, fLanguage, context.EntityTypes.DefaultLanguageID, out Func<IEnumerable<BlueprintEntity>, IEnumerable<TElement>>? projection))
