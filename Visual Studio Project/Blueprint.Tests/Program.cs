@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Nikolaos Siatras
+// SPDX-License-Identifier: MIT
+
 using Blueprint.Tests.Tutorial1;
 
 namespace Blueprint.Tests

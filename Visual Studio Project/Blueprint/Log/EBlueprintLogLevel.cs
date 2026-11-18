@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Nikolaos Siatras
+// SPDX-License-Identifier: MIT
+
 namespace Blueprint.Log
 {
     /// <summary>Specifies the severity and verbosity of a log event.</summary>

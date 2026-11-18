@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Nikolaos Siatras
+// SPDX-License-Identifier: MIT
+
 namespace Blueprint.Fundamentals
 {
     /// <summary>Describes an application language with a stable identifier and a suffix for multilingual columns.</summary>

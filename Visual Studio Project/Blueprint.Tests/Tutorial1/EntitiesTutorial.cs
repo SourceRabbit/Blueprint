@@ -1,4 +1,7 @@
-﻿using Blueprint.Database;
+﻿// Copyright (c) 2026 Nikolaos Siatras
+// SPDX-License-Identifier: MIT
+
+using Blueprint.Database;
 using Blueprint.Database.Sql;
 using Blueprint.Database.TransactionFactory;
 using Blueprint.Fundamentals;

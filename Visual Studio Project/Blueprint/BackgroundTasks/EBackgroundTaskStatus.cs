@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Nikolaos Siatras
+// SPDX-License-Identifier: MIT
+
 namespace Blueprint.BackgroundTasks
 {
     /// <summary>The current execution status of a background task.</summary>

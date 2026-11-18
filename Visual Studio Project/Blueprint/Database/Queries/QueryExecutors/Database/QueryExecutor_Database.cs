@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Nikolaos Siatras
+// SPDX-License-Identifier: MIT
+
 using Blueprint.Entities;
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore.Metadata;

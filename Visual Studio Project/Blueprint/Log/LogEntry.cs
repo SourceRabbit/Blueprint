@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Nikolaos Siatras
+// SPDX-License-Identifier: MIT
+
 namespace Blueprint.Log
 {
     /// <summary>Provides an immutable snapshot of a persisted log event.</summary>

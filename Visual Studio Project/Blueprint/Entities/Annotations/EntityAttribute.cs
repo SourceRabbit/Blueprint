@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Nikolaos Siatras
+// SPDX-License-Identifier: MIT
+
 namespace Blueprint.Entities.Annotations
 {
     /// <summary>Marks a class as a persistent entity and optionally specifies its table.</summary>

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Nikolaos Siatras
+// SPDX-License-Identifier: MIT
+
 using Blueprint.Log;
 using Microsoft.Data.SqlClient;
 using System.Transactions;

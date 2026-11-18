@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Nikolaos Siatras
+// SPDX-License-Identifier: MIT
+
 using System.Linq.Expressions;
 using System.Reflection;
 using Blueprint.Database.Queries.QueryExecutors;

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Nikolaos Siatras
+// SPDX-License-Identifier: MIT
+
 namespace Blueprint.BackgroundTasks.Schedule
 {
     /// <summary>Calculates scheduled executions of a background task.</summary>

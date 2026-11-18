@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Nikolaos Siatras
+// SPDX-License-Identifier: MIT
+
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Blueprint.Entities

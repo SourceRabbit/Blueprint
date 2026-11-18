@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Nikolaos Siatras
+// SPDX-License-Identifier: MIT
+
 namespace Blueprint.BackgroundTasks.Schedule
 {
     /// <summary>Schedules executions at fixed intervals from activation.</summary>

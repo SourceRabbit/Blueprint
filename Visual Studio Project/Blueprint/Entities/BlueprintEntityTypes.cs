@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Nikolaos Siatras
+// SPDX-License-Identifier: MIT
+
 using System.Collections.Concurrent;
 using System.Reflection;
 using System.Reflection.Emit;

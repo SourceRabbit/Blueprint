@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Nikolaos Siatras
+// SPDX-License-Identifier: MIT
+
 namespace Blueprint.Entities.Annotations
 {
     /// <summary>Declares that a property stores a separate value for each language.</summary>

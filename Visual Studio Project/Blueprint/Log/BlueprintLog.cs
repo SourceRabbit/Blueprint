@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Nikolaos Siatras
+// SPDX-License-Identifier: MIT
+
 namespace Blueprint.Log
 {
     /// <summary>Defines the shared event-writing, reading, and deletion contract and captures the originating machine.</summary>

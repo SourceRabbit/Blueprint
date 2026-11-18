@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Nikolaos Siatras
+// SPDX-License-Identifier: MIT
+
 namespace Blueprint.Entities.Annotations
 {
     /// <summary>Declares an index on stored properties of a BlueprintEntity class.</summary>
