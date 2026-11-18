@@ -24,6 +24,18 @@ Entity definitions, generated entity types, and the shared Entity API are organi
 
 New instances use the language whose configured prefix is empty. The default language is determined by that prefix, not by a particular ID. See [Multilingual Entities](Database-Multilingual-Entities.md) for language configuration and translated properties.
 
+## BlueprintEntityDB
+
+Derive from `BlueprintEntityDB` for SQL reads through `QueryExecutor_Database`. Inserts, updates, and deletes also execute in SQL. These entities are not added to the RAM cache when another entity includes them; each `AutoInclude` target uses its own executor.
+
+The shared Entity API supports creation, LINQ queries, and writes. See [Queries and CRUD](Database-Queries-and-CRUD.md) and [Query Executors](Database-Query-Executors.md).
+
+## BlueprintEntityRAM
+
+Derive from `BlueprintEntityRAM` for eligible reads through `QueryExecutor_RAM`. SQL remains the persistent store, and SQL Server Change Tracking synchronizes committed changes into the RAM cache. Included entities continue to use their own DB or RAM source.
+
+Unsupported queries and transaction reads use SQL. The consumer uses the same Entity API as DB entities. See [RAM Caching](Database-RAM-Caching.md) for refresh intervals, SQL requirements, and consistency.
+
 ## Define an entity
 
 ```csharp

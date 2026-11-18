@@ -8,13 +8,18 @@ This manual describes the consumer API available in this repository. Examples ta
 
 - [Getting Started](Getting-Started.md): add Blueprint to your project using a project or DLL reference and configure its dependencies.
 
+## Entities
+
+- [BlueprintEntity](Database-Entities-BlueprintEntity.md): the shared entity base class, inherited properties, and common Entity API.
+- [BlueprintEntityDB](Database-Entities-BlueprintEntity.md#blueprintentitydb): entities that read from and persist to SQL.
+- [BlueprintEntityRAM](Database-Entities-BlueprintEntity.md#blueprintentityram): SQL-persisted entities with RAM reads and Change Tracking synchronization.
+
 ## Blueprint Database
 
 - [BlueprintDatabase](Database-BlueprintDatabase.md): understand the abstract base class, shared configuration, entity registration, and application lifetime.
   - [SqlDatabase](Database-SqlServer.md): database provider for Microsoft SQL Server.
   - [MySQL](Database-MySqlServer.md): Coming Soon.
-- Entities
-  - [BlueprintEntity, BlueprintEntityDB, and BlueprintEntityRAM](Database-Entities-BlueprintEntity.md): class-based entities, storage/cache selection, and migration from interfaces.
+- Entity Mapping
   - [Data Annotations](Database-Entities-Annotations.md): configure fields, indexes, generated values, and concurrency tokens.
   - [Relationships](Data-Entities-Relationships.md): define foreign keys, reference properties, inverse collections, and automatic loading.
   - [Schema Synchronization](Database-Entities-Schema-Synchronization.md): understand which database changes registration applies automatically.
