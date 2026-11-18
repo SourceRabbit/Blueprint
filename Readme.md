@@ -22,11 +22,11 @@ Choose one of the following methods to reference Blueprint in your .NET 10 proje
 
 ### From GitHub Releases
 
-To use [Blueprint 1.0.1](https://github.com/SourceRabbit/Blueprint/releases/tag/1.0.1) without downloading the DLL manually, right-click your project in Visual Studio and select **Edit Project File**. Add the following inside the existing `<Project>` element, before `</Project>`:
+To use [Blueprint 1.1.0](https://github.com/SourceRabbit/Blueprint/releases/tag/1.1.0) without downloading the DLL manually, right-click your project in Visual Studio and select **Edit Project File**. Add the following inside the existing `<Project>` element, before `</Project>`:
 
 ```xml
 <PropertyGroup>
-  <BlueprintVersion>1.0.1</BlueprintVersion>
+  <BlueprintVersion>1.1.0</BlueprintVersion>
   <BlueprintDirectory>$(MSBuildProjectDirectory)/Libraries/Blueprint/$(BlueprintVersion)</BlueprintDirectory>
 </PropertyGroup>
 
@@ -46,9 +46,9 @@ To use [Blueprint 1.0.1](https://github.com/SourceRabbit/Blueprint/releases/tag/
 </Target>
 ```
 
-Keep only one declaration of each package if your project already references it. The package versions above match Blueprint 1.0.1; a DLL reference alone does not install these dependencies.
+Keep only one declaration of each package if your project already references it. The package versions above match Blueprint 1.1.0; a DLL reference alone does not install these dependencies.
 
-Run **Build** once. The target downloads `Blueprint.dll` into `Libraries/Blueprint/1.0.1` before resolving references, and the reference copies it to your application's build output. Later builds reuse the downloaded file. Internet access is needed for the initial DLL download and any missing NuGet packages. IntelliSense may need that first build before it can resolve Blueprint types.
+Run **Build** once. The target downloads `Blueprint.dll` into `Libraries/Blueprint/1.1.0` before resolving references, and the reference copies it to your application's build output. Later builds reuse the downloaded file. Internet access is needed for the initial DLL download and any missing NuGet packages. IntelliSense may need that first build before it can resolve Blueprint types.
 
 You can exclude `Libraries/Blueprint/` from source control because the DLL is downloaded when missing. To upgrade, set `BlueprintVersion` to the exact GitHub release tag and check the dependency versions required by that release. The example stays on the selected version rather than automatically following the latest release.
 
