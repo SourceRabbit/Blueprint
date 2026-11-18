@@ -17,6 +17,73 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
         /// <returns>The indexed candidates, or all rows when narrowing would change query semantics.</returns>
         internal static IEnumerable<BlueprintEntity> SelectRows(RAMCachedTable table, Expression expression, IQueryProvider provider)
         {
+            var key = FindRequiredKey(table, expression, provider);
+            if (key == null)
+            {
+                return table.Rows.Values;
+            }
+            (IProperty property, long? id, IEnumerable<long?>? ids) = key.Value;
+            if (ids != null)
+            {
+                return table.GetRowsByKeys(property, ids);
+            }
+            if (property.IsPrimaryKey())
+            {
+                return id.HasValue && table.Rows.TryGetValue(id.Value, out BlueprintEntity? row) ? new[] { row } : Array.Empty<BlueprintEntity>();
+            }
+            return table.GetForeignKeyRows(property, id);
+        }
+
+        /// <summary>Looks up at most one row when the filters require its ID and the projection cannot change those filters' inputs.</summary>
+        /// <param name="table">The synchronized table.</param>
+        /// <param name="filters">The entity source before Select.</param>
+        /// <param name="selector">The projected expression.</param>
+        /// <param name="provider">The query's owning provider.</param>
+        /// <param name="row">The indexed row, or null when the key is missing.</param>
+        /// <returns>True for a supported primary-key equality, including a lookup miss.</returns>
+        internal static bool TryGetProjectedRow(RAMCachedTable table, Expression filters, Expression selector, IQueryProvider provider, out BlueprintEntity? row)
+        {
+            row = null;
+            var key = FindRequiredKey(table, filters, provider);
+            if (key == null || key.Value.Values != null || !key.Value.Property.IsPrimaryKey() || !IsStableProjection(selector))
+            {
+                return false;
+            }
+            if (key.Value.Value is long id)
+            {
+                table.Rows.TryGetValue(id, out row);
+            }
+            return true;
+        }
+
+        /// <summary>Accepts simple reads and built-in scalar computations that cannot mutate the captured key during enumeration.</summary>
+        /// <param name="expression">The body of the selector or one of its operands.</param>
+        /// <returns>True when applying the selector only to the indexed row preserves evaluation semantics.</returns>
+        private static bool IsStableProjection(Expression expression)
+        {
+            if (expression is ConditionalExpression conditional)
+            {
+                return IsStableProjection(conditional.Test) && IsStableProjection(conditional.IfTrue) && IsStableProjection(conditional.IfFalse);
+            }
+            if (expression is BinaryExpression { NodeType: ExpressionType.Coalesce, Conversion: null } coalesce)
+            {
+                return IsStableProjection(coalesce.Left) && IsStableProjection(coalesce.Right);
+            }
+            if (expression is BinaryExpression binary && binary.NodeType is ExpressionType.Add or ExpressionType.Subtract or ExpressionType.Multiply or ExpressionType.Divide or ExpressionType.Modulo)
+            {
+                bool builtIn = binary.Method == null || binary.Method.DeclaringType == typeof(decimal) || (binary.Method.DeclaringType == typeof(string) && binary.Left.Type == typeof(string) && binary.Right.Type == typeof(string));
+                return builtIn && IsStableProjection(binary.Left) && IsStableProjection(binary.Right);
+            }
+            return IsSimpleValue(expression);
+        }
+
+        /// <summary>Finds a required key in the leading filters of a safely narrowable query.</summary>
+        /// <param name="table">The mapped table.</param>
+        /// <param name="expression">The source query or its terminal expression.</param>
+        /// <param name="provider">The provider that must own the root.</param>
+        /// <returns>The selected equality or membership test, or null when all source rows are needed.</returns>
+        private static (IProperty Property, long? Value, IEnumerable<long?>? Values)? FindRequiredKey(RAMCachedTable table, Expression expression, IQueryProvider provider)
+        {
             Expression source = expression;
             (IProperty Property, long? Value, IEnumerable<long?>? Values)? key = null;
             while (source is MethodCallExpression call && call.Method.DeclaringType == typeof(Queryable))
@@ -32,20 +99,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
                 }
                 source = call.Arguments[0];
             }
-            if (key == null || source is not ConstantExpression { Value: IQueryable root } || !ReferenceEquals(root.Provider, provider) || !IsSimpleQuery(expression))
-            {
-                return table.Rows.Values;
-            }
-            (IProperty property, long? id, IEnumerable<long?>? ids) = key.Value;
-            if (ids != null)
-            {
-                return table.GetRowsByKeys(property, ids);
-            }
-            if (property.IsPrimaryKey())
-            {
-                return id.HasValue && table.Rows.TryGetValue(id.Value, out BlueprintEntity? row) ? new[] { row } : Array.Empty<BlueprintEntity>();
-            }
-            return table.GetForeignKeyRows(property, id);
+            return key.HasValue && source is ConstantExpression { Value: IQueryable root } && ReferenceEquals(root.Provider, provider) && IsSimpleQuery(expression) ? key : null;
         }
 
         /// <summary>Finds required key tests within conjunctions, preferring a primary-key equality when available.</summary>

@@ -22,7 +22,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
             fDatabaseExecutor = databaseExecutor;
         }
 
-        /// <summary>Tries count and single-entity optimizations before general execution against the cache.</summary>
+        /// <summary>Tries count, single-entity and primary-key projection optimizations before general execution against the cache.</summary>
         /// <typeparam name="TResult">The result type.</typeparam>
         /// <param name="context">The context reserved for this operation.</param>
         /// <param name="expression">The complete terminal expression.</param>
@@ -39,6 +39,10 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
             if (TryExecuteElement(context, expression, out object? element))
             {
                 result = (TResult)element!;
+                return true;
+            }
+            if (TryExecuteProjectedSingle(context, expression, out result))
+            {
                 return true;
             }
             bool includeRelated = typeof(BlueprintEntity).IsAssignableFrom(typeof(TResult));
@@ -201,6 +205,54 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
             return true;
         }
 
+        /// <summary>Applies a cached scalar projection and its residual filters to a single indexed row.</summary>
+        /// <typeparam name="TResult">The type selected by the query.</typeparam>
+        /// <param name="context">The context reserved for the current operation.</param>
+        /// <param name="expression">The complete SingleOrDefault expression.</param>
+        /// <param name="result">The selected value, or its default if no row matches.</param>
+        /// <returns>True when the primary-key lookup handles the query.</returns>
+        /// <exception cref="Exception">Cache synchronization or evaluation of the selected value fails.</exception>
+        private bool TryExecuteProjectedSingle<TResult>(BlueprintDatabaseContext context, Expression expression, out TResult result)
+        {
+            result = default!;
+            if (expression is not MethodCallExpression { Method.Name: nameof(Queryable.SingleOrDefault), Arguments.Count: 1 } terminal || terminal.Method.DeclaringType != typeof(Queryable) || terminal.Type != typeof(TResult))
+            {
+                return false;
+            }
+            if (terminal.Arguments[0] is not MethodCallExpression { Method.Name: nameof(Queryable.Select), Arguments.Count: 2 } select || select.Method.DeclaringType != typeof(Queryable)
+                || select.Arguments[0] is not MethodCallExpression { Method.Name: nameof(Queryable.Where) } filters || select.Arguments[1] is not UnaryExpression { Operand: LambdaExpression selector })
+            {
+                return false;
+            }
+            RAMCachedTable? table = GetTable(context, expression, false);
+            if (table == null || !CachedKeyLookup.TryGetProjectedRow(table, filters, selector.Body, fProvider, out BlueprintEntity? row))
+            {
+                return false;
+            }
+            var visitor = new CachedReadExpression(fContract, table.ConcreteType, table.Properties, fLanguage, context.EntityTypes.DefaultLanguageID);
+            if (!visitor.TryRewriteLambda(select.Arguments[1], out LambdaExpression? projection, allowProjection: true))
+            {
+                return false;
+            }
+            Expression body = projection!.Body;
+            Expression source = filters;
+            while (source is MethodCallExpression filter)
+            {
+                if (filter.Method.DeclaringType != typeof(Queryable) || filter.Method.Name != nameof(Queryable.Where) || !visitor.TryRewriteLambda(filter.Arguments[1], out LambdaExpression? predicate))
+                {
+                    return false;
+                }
+                body = Expression.Condition(predicate!.Body, body, Expression.Default(typeof(TResult)), typeof(TResult));
+                source = filter.Arguments[0];
+            }
+            if (row != null)
+            {
+                var project = CachedPagePlans.Bind<BlueprintEntity, TResult>(table, projection.Parameters[0], body);
+                result = project(row);
+            }
+            return true;
+        }
+
         /// <summary>Evaluates safe First and Single operations on shared rows and copies only the selected entity.</summary>
         /// <param name="expression">A supported terminal expression with an optional predicate.</param>
         /// <param name="context">The context reserved for this operation.</param>
@@ -357,7 +409,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
                         return false;
                 }
             }
-            page = CachedPagePlans.Bind(table, rows, source);
+            page = CachedPagePlans.Bind<IEnumerable<BlueprintEntity>, IEnumerable<BlueprintEntity>>(table, rows, source);
             return true;
         }
 

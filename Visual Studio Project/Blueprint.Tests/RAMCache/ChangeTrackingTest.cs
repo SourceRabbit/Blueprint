@@ -4,6 +4,7 @@ using Blueprint.Database.Sql;
 using Blueprint.Fundamentals;
 using Microsoft.Data.SqlClient;
 using System.Diagnostics;
+using System.Reflection;
 
 namespace Blueprint.Tests.RAMCache
 {
@@ -84,6 +85,7 @@ namespace Blueprint.Tests.RAMCache
             Assert(query.Count() == 2, "Blueprint inserts must invalidate the cache for the next read.");
             CheckPageArguments(updated.ID, deleted.ID);
             CheckPrimaryKeyLookup(updated.ID, deleted.ID);
+            CheckScalarProjection(database, updated.ID, deleted.ID);
             CachedRecord retained = query.Single(item => item.ID == updated.ID);
 
             Assert(ExecuteSql(writer, "UPDATE dbo.RAMCachedRecords SET Price = 15, TitleEN = N'Updated EN' WHERE ID = @id;", new SqlParameter("@id", updated.ID)) == 1, "The external SQL update must affect the intended row.");
@@ -173,6 +175,61 @@ namespace Blueprint.Tests.RAMCache
             };
             long[] moving = CachedRecord.Where(record => record.ID == changingID && advance()).Select(record => record.ID).ToArray();
             Assert(moving.SequenceEqual(sourceOrder), "A callback that changes the captured ID must preserve enumeration semantics.");
+        }
+
+        /// <summary>Checks primary-key projections with current captured values, translations, misses and concurrent callers.</summary>
+        /// <param name="database">The database holding the cached query plans.</param>
+        /// <param name="firstID">The record priced at ten with English and default titles.</param>
+        /// <param name="secondID">The record priced at twenty.</param>
+        /// <exception cref="Exception">An indexed result or fallback disagrees with LINQ semantics.</exception>
+        private void CheckScalarProjection(BlueprintDatabase database, long firstID, long secondID)
+        {
+            long id = firstID;
+            decimal adjustment = 1m;
+            decimal minimum = 10m;
+            IQueryable<decimal> prices = CachedRecord.Where(record => id == record.ID).Where(record => record.Price >= minimum).Select(record => record.Price + adjustment);
+            Assert(prices.SingleOrDefault() == 11m, "The projection must use the matched row and the current adjustment.");
+            Delegate compiled = getPriceProjection(database);
+            id = secondID;
+            adjustment = 3m;
+            Assert(prices.SingleOrDefault() == 23m, "A reused query must bind the new key and projection inputs.");
+            Assert(ReferenceEquals(compiled, getPriceProjection(database)), "Different IDs and adjustments must reuse the same compiled scalar plan.");
+            minimum = 21m;
+            Assert(prices.SingleOrDefault() == 0m, "A rejected indexed row must return the default result.");
+            id = -1;
+            Assert(prices.SingleOrDefault() == 0m, "A missing ID must return the default of the projection type.");
+            Assert(CachedRecord.Where(record => record.ID == firstID, 2).Select(record => record.Title).SingleOrDefault() == "Original EN", "A scalar projection must read the selected translation.");
+            Assert(CachedRecord.Where(record => record.ID == secondID).Select(record => record.Title ?? "untitled").SingleOrDefault() == "untitled", "A nullable field on a matching row must be evaluated by the projection.");
+            Assert(CachedRecord.Where(record => record.ID == id).Select(record => record.Title).SingleOrDefault("missing") == "missing", "The explicit-default overload must retain its supplied value.");
+            AssertThrows<InvalidOperationException>(() => CachedRecord.Where(record => record.ID == firstID || record.ID == secondID).Select(record => record.Price).SingleOrDefault(), "A disjunction with two results must still throw.");
+
+            decimal[] results = new decimal[24];
+            Parallel.For(0, results.Length, new ParallelOptions { MaxDegreeOfParallelism = 6 }, index =>
+            {
+                long key = index % 2 == 0 ? firstID : secondID;
+                results[index] = CachedRecord.Where(record => record.ID == key).Select(record => record.Price + index).SingleOrDefault();
+            });
+            Assert(results.Select((price, index) => price == (index % 2 == 0 ? 10m : 20m) + index).All(matches => matches), "Concurrent callers must bind independent keys and projection inputs.");
+        }
+
+        /// <summary>Reads the single compiled price projection in this isolated table to verify delegate reuse.</summary>
+        /// <param name="database">The active test database.</param>
+        /// <returns>The resident decimal projection delegate.</returns>
+        /// <exception cref="InvalidOperationException">The projection was not cached or was compiled more than once.</exception>
+        private static Delegate getPriceProjection(BlueprintDatabase database)
+        {
+            using BlueprintDatabaseContext context = database.GetContext();
+            const BindingFlags INSTANCE_FLAGS = BindingFlags.Instance | BindingFlags.NonPublic;
+            object table = typeof(BlueprintDatabase).GetMethod("GetCachedTable", INSTANCE_FLAGS)!.Invoke(database, new object[] { typeof(CachedRecord), context })!;
+            Type cacheType = typeof(BlueprintDatabase).Assembly.GetType("Blueprint.Database.Queries.QueryExecutors.RAM.CachedPagePlans", true)!;
+            object tables = cacheType.GetField("fTables", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
+            object?[] arguments = { table, null };
+            if (!(bool)tables.GetType().GetMethod("TryGetValue")!.Invoke(tables, arguments)!)
+            {
+                throw new InvalidOperationException("The table does not have any cached plans.");
+            }
+            var plans = (System.Collections.IDictionary)cacheType.GetField("fPlans", INSTANCE_FLAGS)!.GetValue(arguments[1])!;
+            return plans.Values.OfType<Func<BlueprintEntity, object?[], decimal>>().Single();
         }
 
         /// <summary>Checks that repeated page shapes take their arguments from the current execution, including concurrent callers.</summary>
