@@ -20,41 +20,19 @@ See the [Blueprint documentation](https://github.com/SourceRabbit/Blueprint/tree
 
 Choose one of the following methods to reference Blueprint in your .NET 10 project.
 
-### From GitHub Releases
+### From NuGet
 
-To use [Blueprint 1.1.0](https://github.com/SourceRabbit/Blueprint/releases/tag/1.1.0) without downloading the DLL manually, right-click your project in Visual Studio and select **Edit Project File**. Add the following inside the existing `<Project>` element, before `</Project>`:
+Install [SourceRabbit.Blueprint](https://www.nuget.org/packages/SourceRabbit.Blueprint) from your project directory:
 
-```xml
-<PropertyGroup>
-  <BlueprintVersion>1.1.0</BlueprintVersion>
-  <BlueprintDirectory>$(MSBuildProjectDirectory)/Libraries/Blueprint/$(BlueprintVersion)</BlueprintDirectory>
-</PropertyGroup>
-
-<ItemGroup>
-  <Reference Include="Blueprint">
-    <HintPath>$(BlueprintDirectory)/Blueprint.dll</HintPath>
-    <Private>true</Private>
-  </Reference>
-
-  <PackageReference Include="Microsoft.Data.SqlClient" Version="7.1.1" />
-  <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.14" />
-  <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.14" />
-</ItemGroup>
-
-<Target Name="DownloadBlueprintRelease" BeforeTargets="ResolveAssemblyReferences" Condition="'$(DesignTimeBuild)' != 'true' and !Exists('$(BlueprintDirectory)/Blueprint.dll')">
-  <DownloadFile SourceUrl="https://github.com/SourceRabbit/Blueprint/releases/download/$(BlueprintVersion)/Blueprint.dll" DestinationFolder="$(BlueprintDirectory)" DestinationFileName="Blueprint.dll" Retries="3" />
-</Target>
+```shell
+dotnet package add SourceRabbit.Blueprint
 ```
 
-Keep only one declaration of each package if your project already references it. The package versions above match Blueprint 1.1.0; a DLL reference alone does not install these dependencies.
-
-Run **Build** once. The target downloads `Blueprint.dll` into `Libraries/Blueprint/1.1.0` before resolving references, and the reference copies it to your application's build output. Later builds reuse the downloaded file. Internet access is needed for the initial DLL download and any missing NuGet packages. IntelliSense may need that first build before it can resolve Blueprint types.
-
-You can exclude `Libraries/Blueprint/` from source control because the DLL is downloaded when missing. To upgrade, set `BlueprintVersion` to the exact GitHub release tag and check the dependency versions required by that release. The example stays on the selected version rather than automatically following the latest release.
+In Visual Studio, right-click your project, select **Manage NuGet Packages**, then search the **Browse** tab for `SourceRabbit.Blueprint` and select **Install**.
 
 ### From Source
 
-Clone the repository and add a project reference to `Visual Studio Project/Blueprint/Blueprint.csproj` from your consuming project. This path is relative to the Blueprint repository root. The project reference builds Blueprint with your application and restores its NuGet dependencies. Use this method instead of the DLL reference above.
+Clone the repository and add a project reference to `Visual Studio Project/Blueprint/Blueprint.csproj` from your consuming project. This path is relative to the Blueprint repository root. The project reference builds Blueprint with your application and restores its NuGet dependencies.
 
 See the [Getting Started guide](.wiki/GettingStarted.md) for more details about project references and manually supplied DLLs.
 
