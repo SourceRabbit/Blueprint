@@ -30,11 +30,12 @@ dotnet package add SourceRabbit.Blueprint
 
 In Visual Studio, right-click your project, select **Manage NuGet Packages**, then search the **Browse** tab for `SourceRabbit.Blueprint` and select **Install**.
 
-### From Source
+### Download from GitHub Releases
 
-Clone the repository and add a project reference to `Visual Studio Project/Blueprint/Blueprint.csproj` from your consuming project. This path is relative to the Blueprint repository root. The project reference builds Blueprint with your application and restores its NuGet dependencies.
-
-See the [Getting Started guide](.wiki/GettingStarted.md) for more details about project references and manually supplied DLLs.
+1. Open the [latest Blueprint release](https://github.com/SourceRabbit/Blueprint/releases/latest). Under **Assets**, download `Blueprint.dll` and `Blueprint.pdb`.
+2. Place both files in the same folder, for example `Libraries/Blueprint/`. The PDB contains the debugging symbols for the matching DLL.
+3. In Visual Studio, right-click your project's **Dependencies**, select **Add Project Reference**, then **Browse**, and select `Blueprint.dll`.
+4. Install the NuGet dependencies listed for the same Blueprint version under **Dependencies** on the [package page](https://www.nuget.org/packages/SourceRabbit.Blueprint#dependencies-body-tab), then build your project.
 
 ## Getting Started
 
