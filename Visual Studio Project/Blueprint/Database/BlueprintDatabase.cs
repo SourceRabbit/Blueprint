@@ -15,7 +15,7 @@ namespace Blueprint.Database
     public abstract class BlueprintDatabase : IDisposable
     {
         // CONTEXT_POOL_SIZE will turn into a variable later....
-        private const int CONTEXT_POOL_SIZE = 5;
+        private const int CONTEXT_POOL_SIZE = 10;
 
         // Initialization completes before consumer threads start; disposal runs after they have all stopped.
         private static volatile BlueprintDatabase? fActiveInstance;
