@@ -116,4 +116,4 @@ Keep work inside the synchronous `Run()` call. Do not implement `async void Run(
 
 ## Related topics
 
-[Database lifetime](Database-SqlDatabase.md#application-lifetime) · [Queries and CRUD](Database-QueriesAndCRUD.md) · [Troubleshooting](Troubleshooting.md)
+[Database lifetime](Database-SqlDatabase.md#application-lifetime) · [Queries and CRUD](Entitites-BlueprintEntity.md#queries-and-crud) · [Troubleshooting](Troubleshooting.md)

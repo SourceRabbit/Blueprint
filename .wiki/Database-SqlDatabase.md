@@ -299,7 +299,7 @@ Use the database for configuration, registration, and lifetime management. Creat
 
 Although `BlueprintDatabase` exposes `Create<TEntity>()`, direct use of this helper belongs to Blueprint's implementation. The former `Collection<TEntity>()` helper has been removed; queries and writes are accessed through the Entity API. Applications, demos, and tests use the Entity API. Import `Blueprint.Entities` in files using its static extensions.
 
-Entities returned by queries are independent instances without permanent tracking. Changing a property does not save it automatically; call the appropriate Entity method. See [EShop - Checkout Tutorial](Database-EShopCheckoutTutorial.md) and [Queries and CRUD](Database-QueriesAndCRUD.md).
+Entities returned by queries are independent instances without permanent tracking. Changing a property does not save it automatically; call the appropriate Entity method. See [EShop - Checkout Tutorial](Database-EShopCheckoutTutorial.md) and [Queries and CRUD](Entitites-BlueprintEntity.md#queries-and-crud).
 
 ## Execute SQL commands
 

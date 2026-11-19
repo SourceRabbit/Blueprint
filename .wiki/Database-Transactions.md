@@ -364,4 +364,4 @@ This applies to both `BlueprintEntityDB` and `BlueprintEntityRAM`, including the
 
 ## Related topics
 
-[Queries and CRUD](Database-QueriesAndCRUD.md) · [Relationships](Entitites-Relationships.md) · [Data Annotations](Entitites-DataAnnotations.md#concurrency) · [RAM Caching](Database-RAMCaching.md)
+[Queries and CRUD](Entitites-BlueprintEntity.md#queries-and-crud) · [Relationships](Entitites-Relationships.md) · [Data Annotations](Entitites-DataAnnotations.md#concurrency) · [RAM Caching](Database-RAMCaching.md)

@@ -88,4 +88,4 @@ Cache synchronization and query errors propagate. A failed refresh is not silent
 
 ## Related topics
 
-[Entity classes](Entitites-BlueprintEntity.md) · [Queries and CRUD](Database-QueriesAndCRUD.md) · [Relationships](Entitites-Relationships.md) · [RAM Caching](Database-RAMCaching.md)
+[Entity classes](Entitites-BlueprintEntity.md) · [Queries and CRUD](Entitites-BlueprintEntity.md#queries-and-crud) · [Relationships](Entitites-Relationships.md) · [RAM Caching](Database-RAMCaching.md)

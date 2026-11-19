@@ -210,7 +210,7 @@ public string DisplayLabel
 }
 ```
 
-The example stores `Code` and `Name` but creates no column for `DisplayLabel`. An implemented `NotMapped` getter can omit a setter. Evaluate such getters after materializing results; neither SQL translation nor RAM query eligibility is guaranteed for an unmapped property. See [Query limits](Database-QueriesAndCRUD.md#query-limits-and-cached-entities).
+The example stores `Code` and `Name` but creates no column for `DisplayLabel`. An implemented `NotMapped` getter can omit a setter. Evaluate such getters after materializing results; neither SQL translation nor RAM query eligibility is guaranteed for an unmapped property. See [Query limits](Entitites-BlueprintEntity.md#query-limits-and-cached-entities).
 
 ### ForeignKey
 

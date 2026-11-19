@@ -186,7 +186,7 @@ product.SKU = "CAMERA-NEW-001";
 product.Price = 120m;
 ```
 
-Both examples leave the product unsaved. Persist a fully populated entity explicitly through the Entity API or a queued transaction operation. See [Queries and CRUD](Database-QueriesAndCRUD.md).
+Both examples leave the product unsaved. Persist a fully populated entity explicitly through the Entity API or a queued transaction operation. See [Queries and CRUD](Entitites-BlueprintEntity.md#queries-and-crud).
 
 ### Dispose
 
@@ -212,7 +212,7 @@ Stop background managers that use the database before disposal. For `SqlDatabase
 
 Use `BlueprintDatabase` for configuration, registration, transactions, and lifetime management. Applications create and access data through entity methods such as `Product.Create()`, `Product.Where(...)`, `Product.Insert(...)`, and `Product.Update(...)`. Import `Blueprint.Entities` to use these static extensions.
 
-The public `Create<TEntity>()` helper supports Blueprint's implementation; application code uses the entity's `Create()` method. Query and command helpers are internal, and the former `Collection<TEntity>()` API has been removed. See [Queries and CRUD](Database-QueriesAndCRUD.md).
+The public `Create<TEntity>()` helper supports Blueprint's implementation; application code uses the entity's `Create()` method. Query and command helpers are internal, and the former `Collection<TEntity>()` API has been removed. See [Queries and CRUD](Entitites-BlueprintEntity.md#queries-and-crud).
 
 Editing an entity changes that object only. Persist changes explicitly through the Entity API or queue them in a transaction. There is no separate consumer `SaveChanges()` step.
 

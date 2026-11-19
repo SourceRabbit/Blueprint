@@ -147,25 +147,28 @@ namespace Blueprint.Tests.Entities
             AssertThrows<JsonException>(() => ClassRecord.FromJson("""{"ID":"invalid"}"""), "Scalar values must match the declared property type.");
         }
 
-        /// <summary>Checks that reading the English fallback for a missing Greek description preserves the Greek JSON null.</summary>
+        /// <summary>Checks that reading the English fallback preserves both null and empty Greek descriptions in JSON.</summary>
         private void CheckDescriptionFallbackAfterFromJson()
         {
             List<BlueprintLanguage> languages = new List<BlueprintLanguage> { new BlueprintLanguage(1, string.Empty), new BlueprintLanguage(2, "GR") };
             using (EntityModelDatabase database = new EntityModelDatabase(languages))
             {
                 database.RegisterEntity<DescriptionFallbackProduct>();
-                DescriptionFallbackProduct product = DescriptionFallbackProduct.FromJson("""
-                    {"Translations":[
-                        {"LanguageID":1,"Description":"Up to 20 hours of battery life."},
-                        {"LanguageID":2,"Description":null}]}
-                    """);
+                foreach (string greekDescriptionJson in new string[] { "null", "\"\"" })
+                {
+                    DescriptionFallbackProduct product = DescriptionFallbackProduct.FromJson($$"""
+                        {"Translations":[
+                            {"LanguageID":1,"Description":"Up to 20 hours of battery life."},
+                            {"LanguageID":2,"Description":{{greekDescriptionJson}}}]}
+                        """);
 
-                product.CurrentLanguage = 2;
-                Assert(product.Description == "Up to 20 hours of battery life.", "Reading the missing Greek description must return the English fallback after FromJson.");
+                    product.CurrentLanguage = 2;
+                    Assert(product.Description == "Up to 20 hours of battery life.", $"A Greek description of {greekDescriptionJson} must read as the English fallback after FromJson.");
 
-                JsonElement translations = JsonElement.Parse(product.ToJson()).GetProperty("Translations");
-                JsonElement greek = translations.EnumerateArray().Single(entry => entry.GetProperty("LanguageID").GetInt64() == 2);
-                Assert(greek.GetProperty("Description").ValueKind == JsonValueKind.Null, "ToJson must preserve the Greek description as JSON null after reading the English fallback.");
+                    JsonElement translations = JsonElement.Parse(product.ToJson()).GetProperty("Translations");
+                    JsonElement greek = translations.EnumerateArray().Single(entry => entry.GetProperty("LanguageID").GetInt64() == 2);
+                    Assert(greek.GetProperty("Description").GetRawText() == greekDescriptionJson, $"ToJson must preserve the Greek description as {greekDescriptionJson} after reading the fallback.");
+                }
             }
         }
 

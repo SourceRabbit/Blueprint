@@ -99,4 +99,4 @@ Relationships use restricted delete behavior. Remove or reassign dependent rows 
 
 ## Related topics
 
-[Data Annotations](Entitites-DataAnnotations.md) · [Queries and CRUD](Database-QueriesAndCRUD.md) · [Transactions](Database-Transactions.md) · [Multilingual Entities](Entitites-MultilingualEntities.md)
+[Data Annotations](Entitites-DataAnnotations.md) · [Queries and CRUD](Entitites-BlueprintEntity.md#queries-and-crud) · [Transactions](Database-Transactions.md) · [Multilingual Entities](Entitites-MultilingualEntities.md)

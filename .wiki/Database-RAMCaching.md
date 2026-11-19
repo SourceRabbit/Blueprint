@@ -96,7 +96,7 @@ int count = Product.Where(item => item.Price >= 50m).Count();
 
 Eligible queries use LINQ over an in-memory snapshot. This can differ from SQL semantics, especially case sensitivity, culture-sensitive comparisons, null handling, and database collation. Do not assume a string comparison behaves identically on cached and uncached contracts.
 
-For explicit case/accent-insensitive title search, use [Contains with CompareOptions](Database-QueriesAndCRUD.md#contains-with-case-and-accent-options), for example `item.Title.Contains(search, CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace)`, with `Blueprint.Database.Queries` and `System.Globalization` imported. The overload runs directly on immutable strings in RAM, including filters used by counts, paging, and projections. SQL fallback translates that same overload to an explicit case/accent collation only after cache routing; it does not force an otherwise eligible cached query onto SQL. Existing string overloads remain unchanged. See the linked page for null rules, supported options, and linguistic-comparison limits.
+For explicit case/accent-insensitive title search, use [Contains with CompareOptions](Entitites-BlueprintEntity.md#contains-with-case-and-accent-options), for example `item.Title.Contains(search, CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace)`, with `Blueprint.Database.Queries` and `System.Globalization` imported. The overload runs directly on immutable strings in RAM, including filters used by counts, paging, and projections. SQL fallback translates that same overload to an explicit case/accent collation only after cache routing; it does not force an otherwise eligible cached query onto SQL. Existing string overloads remain unchanged. See the linked page for null rules, supported options, and linguistic-comparison limits.
 
 For `[Multilingual]` properties with `[FallbackToDefaultLanguage]`, both SQL and RAM reads use the default-language value when the selected translation is `null` or `""`. This also applies to cached filters, projections, counts, ordering, and paging. Whitespace-only translations are preserved. Cache snapshots retain the raw translations, so fallback does not change stored values or `CurrentLanguage`. See [Default-language fallback](Entitites-MultilingualEntities.md#default-language-fallback).
 
@@ -188,4 +188,4 @@ Preparation and validation queries run against SQL under the transaction. Uncomm
 
 ## Related topics
 
-[SQL Server](Database-SqlDatabase.md) · [Queries and CRUD](Database-QueriesAndCRUD.md) · [Transactions](Database-Transactions.md) · [Troubleshooting](Troubleshooting.md)
+[SQL Server](Database-SqlDatabase.md) · [Queries and CRUD](Entitites-BlueprintEntity.md#queries-and-crud) · [Transactions](Database-Transactions.md) · [Troubleshooting](Troubleshooting.md)

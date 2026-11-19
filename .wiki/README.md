@@ -10,9 +10,11 @@ This manual describes the consumer API available in this repository. Examples ta
 
 ## Entities
 
-- [BlueprintEntity](Entitites-BlueprintEntity.md): the shared entity base class, inherited properties, and common Entity API.
-  - [BlueprintEntityDB](Entitites-BlueprintEntity.md#blueprintentitydb): entities that read from and persist to SQL.
-  - [BlueprintEntityRAM](Entitites-BlueprintEntity.md#blueprintentityram): SQL-persisted entities with RAM reads and Change Tracking synchronization.
+- [BlueprintEntity](Entitites-BlueprintEntity.md)
+  - [Entity Model and JSON](Entitites-BlueprintEntity.md#entity-model-and-json) covers entity contracts, inherited properties, and JSON methods.
+    - [BlueprintEntityDB](Entitites-BlueprintEntity.md#blueprintentitydb): entities that read from and persist to SQL.
+    - [BlueprintEntityRAM](Entitites-BlueprintEntity.md#blueprintentityram): SQL-persisted entities with RAM reads and Change Tracking synchronization.
+  - [Queries and CRUD](Entitites-BlueprintEntity.md#queries-and-crud) covers filtering, sorting, paging, and writing entities.
 - [Data Annotations](Entitites-DataAnnotations.md): configure fields, indexes, generated values, and concurrency tokens.
   - [Relationships](Entitites-Relationships.md): define foreign keys, reference properties, inverse collections, and automatic loading.
   - [Multilingual Entities](Entitites-MultilingualEntities.md): configure languages and read or update translations.
@@ -26,7 +28,6 @@ This manual describes the consumer API available in this repository. Examples ta
   - [Schema Synchronization](Database-SchemaSynchronization.md): understand which database changes registration applies automatically.
 - Reading and Writing Data
   - [Query Executors](Database-QueryExecutors.md): the shared LINQ API and per-entity DB/RAM execution, including mixed AutoInclude graphs.
-  - [Queries and CRUD](Database-QueriesAndCRUD.md): filter, sort, page, insert, update, and delete.
   - [Transactions](Database-Transactions.md): group writes, prepare operations, validate before commit, and handle rollback or cancellation.
 - Caching
   - [RAM Caching](Database-RAMCaching.md): cache selected tables and synchronize committed SQL changes.

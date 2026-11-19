@@ -729,4 +729,4 @@ Keep transaction callbacks synchronous and use the queued operations. Do not sta
 
 ## Related topics
 
-[SQL Server](Database-SqlDatabase.md) · [Transactions](Database-Transactions.md) · [Relationships](Entitites-Relationships.md) · [Queries and CRUD](Database-QueriesAndCRUD.md) · [Data Annotations](Entitites-DataAnnotations.md) · [Multilingual Entities](Entitites-MultilingualEntities.md) · [RAM Caching](Database-RAMCaching.md)
+[SQL Server](Database-SqlDatabase.md) · [Transactions](Database-Transactions.md) · [Relationships](Entitites-Relationships.md) · [Queries and CRUD](Entitites-BlueprintEntity.md#queries-and-crud) · [Data Annotations](Entitites-DataAnnotations.md) · [Multilingual Entities](Entitites-MultilingualEntities.md) · [RAM Caching](Database-RAMCaching.md)
