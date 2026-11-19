@@ -45,17 +45,34 @@ A brand with a single ordinary `Name` property would produce `{"ID":7,"Name":"Ac
 
 ## Create an entity from JSON
 
-With `Blueprint.Entities` imported and `Product` registered in the active database, pass the product JSON above to `Product.FromJson(json)`. In this example language 1 is the default and language 2 is Greek.
+With `Blueprint.Entities` imported and `Product` registered in the active database, call `Product.FromJson(json)` to create the product in memory. `FromJson` restores the supplied translations by `LanguageID` and selects the configured default language. Omitted languages and fields keep their creation defaults. Explicit `null` and empty strings preserve the corresponding stored values. A supplied `ID` or foreign key is copied directly without fetching or saving a row.
+
+Use the same case-sensitive property names as `ToJson()`. Importing `CurrentLanguage` or a translated field at the root raises a `JsonException`, as do duplicate or unknown language IDs, duplicate or unknown properties, and nested relationships. For multilingual contracts, `Translations` is reserved at the root and `LanguageID` is reserved inside translation entries.
+
+### Reading a fallback description after import
+
+In the [product JSON above](#serialize-an-entity-to-json), English (`LanguageID = 1`) is the default language. Greek (`LanguageID = 2`) has a title and a `null` description. The `Product` class enables fallback on its `Description` property.
+
+```csharp
+[Multilingual, FallbackToDefaultLanguage]
+public abstract string? Description { get; set; }
+```
+
+Pass that JSON string as `json` and select Greek. The example uses `System.Text.Json` and `System.Linq` to inspect the Greek entry by its language ID.
 
 ```csharp
 Product product = Product.FromJson(json);
 product.CurrentLanguage = 2;
-string? greekTitle = product.Title;
+Console.WriteLine(product.Title);       // Ασύρματα ακουστικά
+Console.WriteLine(product.Description); // Over-ear headphones.
+
+JsonElement translations = JsonElement.Parse(product.ToJson()).GetProperty("Translations");
+JsonElement greek = translations.EnumerateArray()
+    .Single(entry => entry.GetProperty("LanguageID").GetInt64() == 2);
+Console.WriteLine(greek.GetProperty("Description").GetRawText()); // null
 ```
 
-`FromJson` restores the supplied translations by `LanguageID` and returns the entity with the configured default language selected. Omitted languages and fields keep their creation defaults. Explicit `null` and empty strings preserve the corresponding stored values. A supplied `ID` or foreign key is copied directly without fetching or saving a row.
-
-Use the same case-sensitive property names as `ToJson()`. Importing `CurrentLanguage` or a translated field at the root raises a `JsonException`, as do duplicate or unknown language IDs, duplicate or unknown properties, and nested relationships. For multilingual contracts, `Translations` is reserved at the root and `LanguageID` is reserved inside translation entries.
+Reading `product.Description` applies the fallback and returns the English text. That read leaves the stored Greek translation untouched. `ToJson()` serializes the stored value for each language, so the Greek entry still contains `"Description": null`. See [Default-language fallback](Entitites-MultilingualEntities.md#default-language-fallback).
 
 ## BlueprintEntityDB
 
