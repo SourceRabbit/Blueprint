@@ -71,7 +71,7 @@ The unique index on `BasketItem` allows only one row per `WebsiteUserID` and `Pr
 
 The following standalone `Program.cs` contains all five contracts and all helper methods. It adapts the test's `RunTest()` to `public static void Main()`, removes the `BlueprintTest` inheritance, and makes the shared fields and helpers static. Use this complete file once; the snippets in the walkthrough below explain excerpts from it.
 
-The example connects to local `SQLEXPRESS` and uses `MyEshopDatabase`, English, and Greek. Configure the connection for your environment using the [SQL Server guide](Database-SqlDatabase.md). Product's `BlueprintEntityRAM` base class also requires the [SQL Server caching setup](Database-RAMCaching.md#sql-server-requirements).
+The example connects to the default local SQL Server instance and uses `MyEshopDatabase`, English, and Greek. Configure the connection for your environment using the [SQL Server guide](Database-SqlDatabase.md). Product's `BlueprintEntityRAM` base class also requires the [SQL Server caching setup](Database-RAMCaching.md#sql-server-requirements).
 
 Each execution inserts three new sample products and a new user, then purchases the iPhone 15 inserted by that execution. The tutorial does not reuse an existing customer or deduplicate SKUs. Prices and quantities are demonstration values.
 
@@ -105,7 +105,7 @@ namespace BlueprintManual
         public static void Main()
         {
             // Step 1 - Configure the database connection.
-            string sqlServerConnectionString = "Server=.\\SQLEXPRESS;Integrated Security=True;Encrypt=True;TrustServerCertificate=True;";
+            string sqlServerConnectionString = "Server=.;Integrated Security=True;Encrypt=True;TrustServerCertificate=True;";
 
             // Step 2 - Initialize the languages used by the application.
             // The default language has no suffix and is used for all non-multilingual columns.

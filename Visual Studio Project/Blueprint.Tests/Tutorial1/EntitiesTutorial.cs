@@ -26,7 +26,7 @@ namespace Blueprint.Tests.Tutorial1
         public override void RunTest()
         {
             // Step 1 - Configure the database connection.
-            string sqlServerConnectionString = "Server=.\\SQLEXPRESS;Integrated Security=True;Encrypt=True;TrustServerCertificate=True;";
+            string sqlServerConnectionString = "Server=.;Integrated Security=True;Encrypt=True;TrustServerCertificate=True;";
 
             // Step 2 - Initialize the languages used by the application.
             // The default language has no suffix and is used for all non-multilingual columns.
