@@ -1,7 +1,6 @@
 // Copyright (c) 2026 Nikolaos Siatras
 // SPDX-License-Identifier: MIT
 
-using Blueprint.Entities.Annotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Reflection;
 using System.Text.Json;
@@ -19,35 +18,35 @@ namespace Blueprint.Entities
         [NotMapped]
         public long CurrentLanguage { get; set; }
 
-
-        /// <summary>Serializes the entity's current scalar values without loading relationships.</summary>
-        /// <returns>A JSON string with ID first, followed by CurrentLanguage for multilingual entities and the remaining mapped scalar properties.</returns>
-        /// <exception cref="InvalidOperationException">The entity has no contract marked with [Entity].</exception>
-        public string JSON()
+        /// <summary>Serializes scalar values and all stored translations without loading relationships or changing the selected language.</summary>
+        /// <returns>A JSON object with ID first and one Translations entry per configured language for multilingual entities.</returns>
+        /// <exception cref="InvalidOperationException">The entity contract or its translation storage cannot be represented.</exception>
+        public string ToJson()
         {
-            Type contract = GetType();
-            while (!contract.IsDefined(typeof(EntityAttribute), false))
-            {
-                contract = contract.BaseType ?? throw new InvalidOperationException("Missing [Entity] contract.");
-            }
-
-            PropertyInfo[] properties = BlueprintEntityTypes.GetProperties(contract).ToArray();
+            EntityJsonFields fields = EntityJsonFields.For(GetType());
             JsonObject json = new JsonObject();
             json.Add(nameof(ID), ID);
-            if (properties.Any(property => property.IsDefined(typeof(Multilingual))))
+            foreach (PropertyInfo property in fields.Scalars.Values)
             {
-                json.Add(nameof(CurrentLanguage), CurrentLanguage);
+                if (property.Name != nameof(ID))
+                {
+                    json.Add(property.Name, JsonSerializer.SerializeToNode(property.GetValue(this)));
+                }
             }
 
-            foreach (PropertyInfo property in properties)
+            if (fields.Translations.Count > 0)
             {
-                if (property.Name == nameof(ID) || property.IsDefined(typeof(NotMappedAttribute)) ||
-                    BlueprintEntityTypes.GetRelatedContract(property.PropertyType) != null)
+                JsonArray translations = new JsonArray();
+                foreach ((long languageID, Dictionary<string, PropertyInfo> properties) in fields.Translations)
                 {
-                    continue;
+                    JsonObject translation = new JsonObject() { [EntityJsonFields.LANGUAGE_ID] = languageID };
+                    foreach ((string name, PropertyInfo storage) in properties)
+                    {
+                        translation.Add(name, (string?)storage.GetValue(this));
+                    }
+                    translations.Add(translation);
                 }
-
-                json.Add(property.Name, JsonSerializer.SerializeToNode(property.GetValue(this)));
+                json.Add(EntityJsonFields.TRANSLATIONS, translations);
             }
 
             return json.ToJsonString();

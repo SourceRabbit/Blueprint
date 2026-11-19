@@ -17,6 +17,7 @@ namespace Blueprint.Entities
     internal sealed class BlueprintEntityTypes
     {
         private static readonly ConcurrentDictionary<(Type Contract, string Languages), Type> fGeneratedTypes = new();
+        private static readonly ConcurrentDictionary<Type, long[]> fGeneratedLanguageIDs = new ConcurrentDictionary<Type, long[]>();
         private static readonly ModuleBuilder fModule = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName("Blueprint.Generated"), AssemblyBuilderAccess.Run).DefineDynamicModule("Entities");
         private static readonly object fGenerationLock = new();
         private static long fGeneratedTypeCount;
@@ -217,6 +218,15 @@ namespace Blueprint.Entities
             return fLanguages.SingleOrDefault(language => language.ID == languageID) ?? throw new ArgumentOutOfRangeException(nameof(languageID), languageID, "The language is not registered in this Blueprint model.");
         }
 
+        /// <summary>Returns the language IDs backed by the generated CLR type, including after database disposal.</summary>
+        /// <param name="type">The concrete multilingual entity type.</param>
+        /// <returns>The configured language IDs in ascending order.</returns>
+        /// <exception cref="InvalidOperationException">The type has no generated translation storage.</exception>
+        internal static IReadOnlyList<long> GetLanguageIDs(Type type)
+        {
+            return fGeneratedLanguageIDs.TryGetValue(type, out long[]? ids) ? ids : throw new InvalidOperationException($"Use a Blueprint-generated instance to access all translations of '{type}'.");
+        }
+
         /// <summary>Returns inherited properties, preferring the most specific declaration.</summary>
         /// <param name="contract">The entity class.</param>
         /// <returns>One property per name.</returns>
@@ -297,7 +307,9 @@ namespace Blueprint.Entities
                 builder.DefineMethodOverride(generated.Setter, property.SetMethod!);
             }
 
-            return builder.CreateType()!;
+            Type generatedType = builder.CreateType()!;
+            fGeneratedLanguageIDs[generatedType] = languages.Select(language => language.ID).Order().ToArray();
+            return generatedType;
         }
 
         /// <summary>Creates a property with accessors and optional direct storage in a private field.</summary>

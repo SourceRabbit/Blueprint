@@ -26,15 +26,36 @@ New instances use the language whose configured prefix is empty. The default lan
 
 ## Serialize an entity to JSON
 
-Call `product.JSON()` on an existing instance to get a JSON string with its current scalar values, including unsaved edits and null foreign keys. The method reads from memory and works after the database has been disposed. JSON keys use the public property names. A relationship contributes its foreign key, such as `BrandID`. References, collections, and computed `[NotMapped]` properties are omitted even when related entities are already loaded.
+Call `product.ToJson()` on an existing instance to get a JSON string with its current scalar values, including unsaved edits and null foreign keys. The method reads from memory and works after the database has been disposed. JSON keys use the public property names. A relationship contributes its foreign key, such as `BrandID`. References, collections, and computed `[NotMapped]` properties are omitted even when related entities are already loaded.
 
-`ID` is always first. If the contract has any `[Multilingual]` properties, `CurrentLanguage` is second. Each translated property appears once with the value its getter returns for that language, including any configured fallback. For example, a product with English selected as language 2 could produce the following JSON.
+`ID` is always first. For a multilingual contract, `Translations` contains one object per configured language. Each object has a numeric `LanguageID` and every `[Multilingual]` field, using its stored value even when it is `null` or an empty string. Selecting another `CurrentLanguage` changes how the entity's getter displays a value and has no effect on the JSON.
 
 ```json
-{"ID":42,"CurrentLanguage":2,"BrandID":7,"Title":"Wireless headphones"}
+{
+  "ID": 42,
+  "BrandID": 7,
+  "Translations": [
+    {"LanguageID": 1, "Title": "Wireless headphones", "Description": "Over-ear headphones."},
+    {"LanguageID": 2, "Title": "Ασύρματα ακουστικά", "Description": null}
+  ]
+}
 ```
 
 A brand with a single ordinary `Name` property would produce `{"ID":7,"Name":"Acme"}`.
+
+## Create an entity from JSON
+
+With `Blueprint.Entities` imported and `Product` registered in the active database, pass the product JSON above to `Product.FromJson(json)`. In this example language 1 is the default and language 2 is Greek.
+
+```csharp
+Product product = Product.FromJson(json);
+product.CurrentLanguage = 2;
+string? greekTitle = product.Title;
+```
+
+`FromJson` restores the supplied translations by `LanguageID` and returns the entity with the configured default language selected. Omitted languages and fields keep their creation defaults. Explicit `null` and empty strings preserve the corresponding stored values. A supplied `ID` or foreign key is copied directly without fetching or saving a row.
+
+Use the same case-sensitive property names as `ToJson()`. Importing `CurrentLanguage` or a translated field at the root raises a `JsonException`, as do duplicate or unknown language IDs, duplicate or unknown properties, and nested relationships. For multilingual contracts, `Translations` is reserved at the root and `LanguageID` is reserved inside translation entries.
 
 ## BlueprintEntityDB
 

@@ -23,7 +23,8 @@ namespace Blueprint.Tests.Entities
             ResetAssertions();
             ClassRecord record;
             ClassGroup group;
-            using (EntityModelDatabase database = new EntityModelDatabase())
+            List<BlueprintLanguage> languages = new List<BlueprintLanguage> { new BlueprintLanguage(7, string.Empty), new BlueprintLanguage(2, "FR") };
+            using (EntityModelDatabase database = new EntityModelDatabase(languages))
             {
                 Assert(typeof(BlueprintEntity).IsClass && typeof(BlueprintEntityDB).BaseType == typeof(BlueprintEntity) && typeof(BlueprintEntityRAM).BaseType == typeof(BlueprintEntity), "DB and RAM must be sibling entity base classes.");
                 Assert(typeof(BlueprintEntity).Assembly.GetType("Blueprint.Entities.Annotations.RAMCached") == null, "The cache annotation must be removed from the public assembly.");
@@ -58,36 +59,114 @@ namespace Blueprint.Tests.Entities
                 Assert(!sql.Contains("Discriminator"), "Class inheritance must not add EF inheritance discriminators.");
                 database.RegisterEntity<ClassGroup>();
                 Assert(database.TableCount == 2 && ClassRecord.Create().Code == "initial", "Repeated registration must preserve the generated model and class constructors.");
+                CheckFromJson();
             }
             CheckJson(record, group);
+            CheckDescriptionFallbackAfterFromJson();
             Console.WriteLine($"Entity class checks passed: {getAssertionCount()} assertions.");
         }
 
-        /// <summary>Checks flat JSON for DB and RAM entities after the database has been disposed.</summary>
+        /// <summary>Checks scalar and multilingual JSON after the database has been disposed.</summary>
         /// <param name="record">A record with a French translation and a default title.</param>
         /// <param name="group">A group with no multilingual properties.</param>
         private void CheckJson(ClassRecord record, ClassGroup group)
         {
             record.ID = 42;
-            JsonElement json = JsonSerializer.Deserialize<JsonElement>(record.JSON());
+            JsonElement json = JsonSerializer.Deserialize<JsonElement>(record.ToJson());
             string[] names = json.EnumerateObject().Select(property => property.Name).ToArray();
-            Assert(names.Take(2).SequenceEqual(new string[] { "ID", "CurrentLanguage" }), "ID and CurrentLanguage must be the first two JSON properties.");
-            Assert(names.ToHashSet().SetEquals(new string[] { "ID", "CurrentLanguage", "Title", "Code", "GroupID", "Version" }), "Only mapped scalar contract properties and the selected language should appear.");
-            Assert(json.GetProperty("ID").GetInt64() == 42 && json.GetProperty("CurrentLanguage").GetInt64() == 2 && json.GetProperty("Title").GetString() == "French title", "JSON must use the entity's selected translation.");
+            Assert(names.First() == "ID" && names.ToHashSet().SetEquals(new string[] { "ID", "Code", "GroupID", "Version", "Translations" }), "The root must contain ID first, shared scalars and Translations.");
+            Dictionary<long, JsonElement> translations = json.GetProperty("Translations").EnumerateArray().ToDictionary(entry => entry.GetProperty("LanguageID").GetInt64());
+            Assert(translations.Count == 2 && translations[7].GetProperty("Title").GetString() == "Constructor title" && translations[2].GetProperty("Title").GetString() == "French title", "Every configured language must have its own stored values.");
+            Assert(translations.Values.All(entry => entry.GetProperty("Description").ValueKind == JsonValueKind.Null), "Each language entry must also include unset multilingual properties.");
+            Assert(json.GetProperty("ID").GetInt64() == 42 && record.CurrentLanguage == 2, "Serializing must preserve the identity and selected language.");
             Assert(json.GetProperty("GroupID").ValueKind == JsonValueKind.Null, "A null foreign key must still appear in JSON.");
 
             group.ID = 7;
             group.Name = "Group";
             record.GroupID = group.ID;
-            string unloadedJson = record.JSON();
+            string unloadedJson = record.ToJson();
             record.Group = group;
             group.Records.Add(record);
-            Assert(record.JSON() == unloadedJson && JsonSerializer.Deserialize<JsonElement>(unloadedJson).GetProperty("GroupID").GetInt64() == 7, "Loading a reference must preserve the foreign key and leave JSON unchanged.");
-            Assert(group.JSON() == "{\"ID\":7,\"Name\":\"Group\"}", "An entity without multilingual fields must omit CurrentLanguage and loaded collections.");
+            Assert(record.ToJson() == unloadedJson && JsonSerializer.Deserialize<JsonElement>(unloadedJson).GetProperty("GroupID").GetInt64() == 7, "Loading a reference must preserve the foreign key and leave JSON unchanged.");
+            Assert(group.ToJson() == "{\"ID\":7,\"Name\":\"Group\"}", "An entity without multilingual fields must omit CurrentLanguage and loaded collections.");
 
             record.Title = null;
-            json = JsonSerializer.Deserialize<JsonElement>(record.JSON());
-            Assert(json.GetProperty("Title").GetString() == "Constructor title" && json.GetProperty("CurrentLanguage").GetInt64() == 2, "Fallback must preserve the selected language ID in JSON.");
+            string withMissingTitle = record.ToJson();
+            json = JsonSerializer.Deserialize<JsonElement>(withMissingTitle);
+            JsonElement french = json.GetProperty("Translations").EnumerateArray().Single(entry => entry.GetProperty("LanguageID").GetInt64() == 2);
+            Assert(record.Title == "Constructor title" && french.GetProperty("Title").ValueKind == JsonValueKind.Null, "The fallback display value must not replace a missing stored translation.");
+            record.CurrentLanguage = 7;
+            Assert(record.ToJson() == withMissingTitle, "Changing CurrentLanguage must leave the serialized document identical.");
+        }
+
+        /// <summary>Checks JSON creation for registered DB and RAM entities without a SQL connection.</summary>
+        private void CheckFromJson()
+        {
+            ClassRecord record = ClassRecord.FromJson("""
+                {"GroupID":7,"ID":42,"Version":"AQI=","Translations":[
+                    {"Title":"French title","Description":null,"LanguageID":2},
+                    {"LanguageID":7,"Description":"Default description","Title":"Default title"}]}
+                """);
+            Assert(record.CurrentLanguage == 7 && record.Title == "Default title" && record.Description == "Default description", "Import must return the entity in the configured default language.");
+            Assert(record.ID == 42 && record.GroupID == 7 && record.Group == null, "JSON must preserve scalar keys without fetching related rows.");
+            Assert(record.Version.SequenceEqual(new byte[] { 1, 2 }), "Binary scalar properties must accept the base64 representation emitted by ToJson.");
+            record.CurrentLanguage = 2;
+            Assert(record.Title == "French title" && record.Description == null, "LanguageID must select the storage for every translated property regardless of JSON property order.");
+            ClassRecord copy = ClassRecord.FromJson(record.ToJson());
+            Assert(copy.CurrentLanguage == 7 && copy.ToJson() == record.ToJson(), "A round trip must preserve every translation and restore the default language.");
+
+            ClassRecord withEmptyTitle = ClassRecord.FromJson("""{"Translations":[{"LanguageID":2,"Title":""}]}""");
+            withEmptyTitle.CurrentLanguage = 2;
+            JsonElement entries = JsonSerializer.Deserialize<JsonElement>(withEmptyTitle.ToJson()).GetProperty("Translations");
+            JsonElement french = entries.EnumerateArray().Single(entry => entry.GetProperty("LanguageID").GetInt64() == 2);
+            Assert(withEmptyTitle.Title == "Constructor title" && french.GetProperty("Title").GetString() == string.Empty, "Empty translations must survive fallback and omitted languages must keep their initialized values.");
+
+            ClassRecord partial = ClassRecord.FromJson("""{"GroupID":null}""");
+            Assert(partial.ID == 0 && partial.CurrentLanguage == 7 && partial.Code == "initial" && partial.GroupID == null, "Omitted fields must keep their creation defaults.");
+            ClassRecord cleared = ClassRecord.FromJson("""{"Translations":[{"LanguageID":7,"Title":null}]}""");
+            JsonElement emptyEntries = JsonSerializer.Deserialize<JsonElement>(cleared.ToJson()).GetProperty("Translations");
+            Assert(cleared.Title == null && emptyEntries.GetArrayLength() == 2 &&
+                emptyEntries.EnumerateArray().All(entry => entry.GetProperty("Title").ValueKind == JsonValueKind.Null && entry.GetProperty("Description").ValueKind == JsonValueKind.Null),
+                "Explicit null must clear a constructor value and languages with no stored values must still be exported.");
+            ClassGroup group = ClassGroup.FromJson("""{"Name":"Group"}""");
+            Assert(group.Name == "Group" && group.Records.Count == 0, "A non-multilingual entity must keep its initialized collections.");
+
+            AssertThrows<JsonException>(() => ClassRecord.FromJson("""{"CurrentLanguage":2}"""), "CurrentLanguage is runtime state and cannot be imported.");
+            AssertThrows<JsonException>(() => ClassGroup.FromJson("""{"CurrentLanguage":2}"""), "Ordinary entities must reject CurrentLanguage.");
+            AssertThrows<JsonException>(() => ClassGroup.FromJson("""{"Translations":[]}"""), "Ordinary entities must reject a translation array.");
+            AssertThrows<JsonException>(() => ClassRecord.FromJson("""{"Title":"A"}"""), "Multilingual properties must be under Translations.");
+            AssertThrows<JsonException>(() => ClassRecord.FromJson("""{"Translations":{}}"""), "Translations must be an array.");
+            AssertThrows<JsonException>(() => ClassRecord.FromJson("""{"Translations":[{"Title":"A"}]}"""), "Each entry must have a LanguageID.");
+            AssertThrows<JsonException>(() => ClassRecord.FromJson("""{"Translations":[{"LanguageID":999}]}"""), "Only configured languages are valid.");
+            AssertThrows<JsonException>(() => ClassRecord.FromJson("""{"Translations":[{"LanguageID":2},{"LanguageID":2}]}"""), "Duplicate language entries are ambiguous.");
+            AssertThrows<JsonException>(() => ClassRecord.FromJson("""{"Translations":[{"LanguageID":2,"Title":"A","Title":"B"}]}"""), "Duplicate translation properties are ambiguous.");
+            AssertThrows<JsonException>(() => ClassRecord.FromJson("""{"Translations":[{"LanguageID":2,"Code":"shared"}]}"""), "Only multilingual fields belong in a translation entry.");
+            AssertThrows<JsonException>(() => ClassRecord.FromJson("""{"Translations":[{"LanguageID":2,"Title":42}]}"""), "Translations must contain strings or null.");
+            AssertThrows<JsonException>(() => ClassRecord.FromJson("""{"Group":{}}"""), "Nested entity input must be rejected.");
+            AssertThrows<JsonException>(() => ClassRecord.FromJson("""{"Display":"computed"}"""), "Unmapped properties must be rejected.");
+            AssertThrows<JsonException>(() => ClassRecord.FromJson("""{"ID":"invalid"}"""), "Scalar values must match the declared property type.");
+        }
+
+        /// <summary>Checks that reading the English fallback for a missing Greek description preserves the Greek JSON null.</summary>
+        private void CheckDescriptionFallbackAfterFromJson()
+        {
+            List<BlueprintLanguage> languages = new List<BlueprintLanguage> { new BlueprintLanguage(1, string.Empty), new BlueprintLanguage(2, "GR") };
+            using (EntityModelDatabase database = new EntityModelDatabase(languages))
+            {
+                database.RegisterEntity<DescriptionFallbackProduct>();
+                DescriptionFallbackProduct product = DescriptionFallbackProduct.FromJson("""
+                    {"Translations":[
+                        {"LanguageID":1,"Description":"Up to 20 hours of battery life."},
+                        {"LanguageID":2,"Description":null}]}
+                    """);
+
+                product.CurrentLanguage = 2;
+                Assert(product.Description == "Up to 20 hours of battery life.", "Reading the missing Greek description must return the English fallback after FromJson.");
+
+                JsonElement translations = JsonElement.Parse(product.ToJson()).GetProperty("Translations");
+                JsonElement greek = translations.EnumerateArray().Single(entry => entry.GetProperty("LanguageID").GetInt64() == 2);
+                Assert(greek.GetProperty("Description").ValueKind == JsonValueKind.Null, "ToJson must preserve the Greek description as JSON null after reading the English fallback.");
+            }
         }
 
         /// <summary>Κατασκευάζει και επιθεωρεί το SQL μοντέλο χωρίς πρόσβαση σε πραγματική βάση.</summary>
@@ -95,8 +174,9 @@ namespace Blueprint.Tests.Entities
         {
             private int fTableCount;
 
-            /// <summary>Ενεργοποιεί τη δοκιμαστική βάση με προεπιλεγμένο language ID διαφορετικό από το ένα.</summary>
-            internal EntityModelDatabase() : base("EntityClassModel", "Server=unused;Database=EntityClassModel", new List<BlueprintLanguage> { new BlueprintLanguage(7, string.Empty), new BlueprintLanguage(2, "FR") })
+            /// <summary>Initializes the test model with the languages used by the calling test.</summary>
+            /// <param name="languages">The configured languages, including the default with an empty prefix.</param>
+            internal EntityModelDatabase(List<BlueprintLanguage> languages) : base("EntityClassModel", "Server=unused;Database=EntityClassModel", languages)
             {
                 try
                 {
@@ -148,6 +228,14 @@ namespace Blueprint.Tests.Entities
         }
     }
 
+    /// <summary>Models a product whose missing description falls back to the default language.</summary>
+    [Entity]
+    public abstract class DescriptionFallbackProduct : BlueprintEntityDB
+    {
+        [Multilingual, FallbackToDefaultLanguage]
+        public abstract string? Description { get; set; }
+    }
+
     /// <summary>Κοινή μη καταχωρισμένη βάση που μεταβιβάζει RAM caching και translated properties.</summary>
     public abstract class ClassRecordBase : BlueprintEntityRAM
     {
@@ -175,6 +263,9 @@ namespace Blueprint.Tests.Entities
 
         [MaxLength(40)]
         public string Code { get; set; } = "initial";
+
+        [Multilingual]
+        public virtual string? Description { get; set; }
 
         public long? GroupID { get; set; }
 
