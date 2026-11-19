@@ -5,8 +5,7 @@
 ## Contents
 
 - [Inherited properties](#inherited-properties)
-- [BlueprintEntityDB](#blueprintentitydb)
-- [BlueprintEntityRAM](#blueprintentityram)
+- [Choosing an entity base](#choosing-an-entity-base)
 - [Define an entity](#define-an-entity)
 - [Register and create an instance](#register-and-create-an-instance)
 - [JSON serialization](#json-serialization)
@@ -24,19 +23,14 @@
 
 New instances use the language whose configured prefix is empty. The default language is determined by that prefix, not by a particular ID. See [Multilingual Entities](Entitites-MultilingualEntities.md) for language configuration and translated properties.
 
-## BlueprintEntityDB
+## Choosing an entity base
 
-Derive from `BlueprintEntityDB` for SQL reads through `QueryExecutor_Database`. Inserts, updates, and deletes also execute in SQL. These entities are not added to the RAM cache when another entity includes them; each `AutoInclude` target uses its own executor.
+| Entity base | Read source outside transactions | When to choose it |
+| --- | --- | --- |
+| <a name="blueprintentitydb"></a>[BlueprintEntityDB](Entitites-BlueprintEntityDB.md) | SQL Server | The application needs current database values or usually reads a small part of a large table. |
+| <a name="blueprintentityram"></a>[BlueprintEntityRAM](Entitites-BlueprintEntityRAM.md) | An in-memory snapshot for supported queries, SQL Server for the rest | The table is read frequently, all rows and translations fit in memory, and readers can tolerate the delay between cache refreshes. |
 
-The shared Entity API supports creation, LINQ queries, and writes. See [Queries and CRUD](#queries-and-crud) and [Query Executors](Database-QueryExecutors.md).
-
-## BlueprintEntityRAM
-
-Derive from `BlueprintEntityRAM` for eligible reads through `QueryExecutor_RAM`. SQL remains the persistent store, and SQL Server Change Tracking synchronizes committed changes into the RAM cache. Cache selection follows class inheritance, including intermediate base classes. This replaces the former `[RAMCached]` annotation.
-
-Unsupported queries use SQL. See [RAM Caching](Database-RAMCaching.md) for refresh intervals, SQL requirements, and consistency.
-
-Each `AutoInclude` target uses its own executor, so a DB parent can include a RAM child and a RAM parent can include a DB child. Inside a transaction, reads use SQL for the entire graph. See [Query Executors](Database-QueryExecutors.md).
+Both bases write to SQL Server. Inside a Blueprint transaction, all reads use SQL Server, including related entities loaded through `AutoInclude`.
 
 ## Define an entity
 

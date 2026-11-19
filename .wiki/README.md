@@ -11,8 +11,8 @@ This manual describes the consumer API available in this repository. Examples ta
 ## Entities
 
 - [BlueprintEntity](Entitites-BlueprintEntity.md) describes the entity contract, inherited properties, and shared Entity API.
-  - [BlueprintEntityDB](Entitites-BlueprintEntity.md#blueprintentitydb) reads from and writes to SQL.
-  - [BlueprintEntityRAM](Entitites-BlueprintEntity.md#blueprintentityram) serves eligible queries from RAM and uses SQL Server Change Tracking to synchronize the cache.
+  - [BlueprintEntityDB](Entitites-BlueprintEntityDB.md) reads from and writes to SQL.
+  - [BlueprintEntityRAM](Entitites-BlueprintEntityRAM.md) serves eligible queries from RAM and uses SQL Server Change Tracking to synchronize the cache.
 - [Data Annotations](Entitites-DataAnnotations.md): configure fields, indexes, generated values, and concurrency tokens.
   - [Relationships](Entitites-Relationships.md): define foreign keys, reference properties, inverse collections, and automatic loading.
   - [Multilingual Entities](Entitites-MultilingualEntities.md): configure languages and read or update translations.
