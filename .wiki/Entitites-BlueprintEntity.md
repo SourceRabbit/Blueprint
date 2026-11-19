@@ -24,6 +24,18 @@ Entity definitions, generated entity types, and the shared Entity API are organi
 
 New instances use the language whose configured prefix is empty. The default language is determined by that prefix, not by a particular ID. See [Multilingual Entities](Entitites-MultilingualEntities.md) for language configuration and translated properties.
 
+## Serialize an entity to JSON
+
+Call `product.JSON()` on an existing instance to get a JSON string with its current scalar values, including unsaved edits and null foreign keys. The method reads from memory and works after the database has been disposed. JSON keys use the public property names. A relationship contributes its foreign key, such as `BrandID`. References, collections, and computed `[NotMapped]` properties are omitted even when related entities are already loaded.
+
+`ID` is always first. If the contract has any `[Multilingual]` properties, `CurrentLanguage` is second. Each translated property appears once with the value its getter returns for that language, including any configured fallback. For example, a product with English selected as language 2 could produce the following JSON.
+
+```json
+{"ID":42,"CurrentLanguage":2,"BrandID":7,"Title":"Wireless headphones"}
+```
+
+A brand with a single ordinary `Name` property would produce `{"ID":7,"Name":"Acme"}`.
+
 ## BlueprintEntityDB
 
 Derive from `BlueprintEntityDB` for SQL reads through `QueryExecutor_Database`. Inserts, updates, and deletes also execute in SQL. These entities are not added to the RAM cache when another entity includes them; each `AutoInclude` target uses its own executor.

@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Data.Common;
+using System.Text.Json;
 
 namespace Blueprint.Tests.Entities
 {
@@ -20,6 +21,8 @@ namespace Blueprint.Tests.Entities
         public override void RunTest()
         {
             ResetAssertions();
+            ClassRecord record;
+            ClassGroup group;
             using (EntityModelDatabase database = new EntityModelDatabase())
             {
                 Assert(typeof(BlueprintEntity).IsClass && typeof(BlueprintEntityDB).BaseType == typeof(BlueprintEntity) && typeof(BlueprintEntityRAM).BaseType == typeof(BlueprintEntity), "DB and RAM must be sibling entity base classes.");
@@ -35,7 +38,7 @@ namespace Blueprint.Tests.Entities
 
                 database.RegisterEntity<ClassRecord>();
                 Assert(database.TableCount == 2, "Related classes must map to two tables without common base tables or discriminators.");
-                ClassRecord record = ClassRecord.Create();
+                record = ClassRecord.Create();
                 Assert(record is BlueprintEntityRAM && record.GetType().BaseType == typeof(ClassRecord), "Generated entities must derive from the user's class.");
                 Assert(record.ID == 0 && record.CurrentLanguage == 7, "Creation must preserve the inherited identity and configured default language.");
                 Assert(record.Code == "initial" && record.Title == "Constructor title", "Class initializers and constructors must run, including virtual translation assignments.");
@@ -48,14 +51,43 @@ namespace Blueprint.Tests.Entities
                 Assert(record.Title == "Constructor title", "Translations must use independent storage.");
                 record.CurrentLanguage = 2;
                 Assert(record.Title == "French title", "Switching languages must recover the selected translation.");
-                Assert(ClassGroup.Create().Records.Count == 0, "Abstract collection navigations must be initialized by Create.");
+                group = ClassGroup.Create();
+                Assert(group.Records.Count == 0, "Abstract collection navigations must be initialized by Create.");
                 string sql = ClassRecord.Where(item => item.Title == "French title" && item.Group!.Name == "Group", 2).Select(item => item.Title).ToQueryString();
                 Assert(sql.Contains("ClassRecords") && sql.Contains("ClassGroups") && sql.Contains("TitleFR"), "Class relationships and translated projections must translate to their physical tables.");
                 Assert(!sql.Contains("Discriminator"), "Class inheritance must not add EF inheritance discriminators.");
                 database.RegisterEntity<ClassGroup>();
                 Assert(database.TableCount == 2 && ClassRecord.Create().Code == "initial", "Repeated registration must preserve the generated model and class constructors.");
             }
+            CheckJson(record, group);
             Console.WriteLine($"Entity class checks passed: {getAssertionCount()} assertions.");
+        }
+
+        /// <summary>Checks flat JSON for DB and RAM entities after the database has been disposed.</summary>
+        /// <param name="record">A record with a French translation and a default title.</param>
+        /// <param name="group">A group with no multilingual properties.</param>
+        private void CheckJson(ClassRecord record, ClassGroup group)
+        {
+            record.ID = 42;
+            JsonElement json = JsonSerializer.Deserialize<JsonElement>(record.JSON());
+            string[] names = json.EnumerateObject().Select(property => property.Name).ToArray();
+            Assert(names.Take(2).SequenceEqual(new string[] { "ID", "CurrentLanguage" }), "ID and CurrentLanguage must be the first two JSON properties.");
+            Assert(names.ToHashSet().SetEquals(new string[] { "ID", "CurrentLanguage", "Title", "Code", "GroupID", "Version" }), "Only mapped scalar contract properties and the selected language should appear.");
+            Assert(json.GetProperty("ID").GetInt64() == 42 && json.GetProperty("CurrentLanguage").GetInt64() == 2 && json.GetProperty("Title").GetString() == "French title", "JSON must use the entity's selected translation.");
+            Assert(json.GetProperty("GroupID").ValueKind == JsonValueKind.Null, "A null foreign key must still appear in JSON.");
+
+            group.ID = 7;
+            group.Name = "Group";
+            record.GroupID = group.ID;
+            string unloadedJson = record.JSON();
+            record.Group = group;
+            group.Records.Add(record);
+            Assert(record.JSON() == unloadedJson && JsonSerializer.Deserialize<JsonElement>(unloadedJson).GetProperty("GroupID").GetInt64() == 7, "Loading a reference must preserve the foreign key and leave JSON unchanged.");
+            Assert(group.JSON() == "{\"ID\":7,\"Name\":\"Group\"}", "An entity without multilingual fields must omit CurrentLanguage and loaded collections.");
+
+            record.Title = null;
+            json = JsonSerializer.Deserialize<JsonElement>(record.JSON());
+            Assert(json.GetProperty("Title").GetString() == "Constructor title" && json.GetProperty("CurrentLanguage").GetInt64() == 2, "Fallback must preserve the selected language ID in JSON.");
         }
 
         /// <summary>Κατασκευάζει και επιθεωρεί το SQL μοντέλο χωρίς πρόσβαση σε πραγματική βάση.</summary>
