@@ -30,8 +30,7 @@ namespace Blueprint.Tests.Entities
                     using (BlueprintDatabase database = new SqlDatabase(databaseName, settings.ConnectionString, new List<BlueprintLanguage> { new BlueprintLanguage(7, string.Empty), new BlueprintLanguage(2, "FR") }))
                     {
                         database.RAMCacheRefreshInterval = TimeSpan.FromHours(1);
-                        database.RegisterEntity<ClassRecord>();
-                        database.RegisterEntity<PlainRecord>();
+                        database.RegisterEntities(typeof(ClassRecord), typeof(PlainRecord));
                         ClassGroup group = ClassGroup.Create();
                         group.Name = "Group";
                         ClassRecord record = ClassRecord.Create();
@@ -88,7 +87,7 @@ namespace Blueprint.Tests.Entities
                         database.RAMCacheRefreshInterval = TimeSpan.FromMilliseconds(50);
                         Assert(SpinWait.SpinUntil(() => ClassRecord.SingleOrDefault(item => item.ID == record.ID, 2)!.Title == "External French", TimeSpan.FromSeconds(10)), "Change Tracking must synchronize external updates for inherited RAM entities.");
                         Assert(stored.Title == "French", "Refreshes must preserve previously returned independent objects.");
-                        database.RegisterEntity<ClassRecord>();
+                        database.RegisterEntities(typeof(ClassRecord));
                         Assert(ClassRecord.SingleOrDefault(item => item.ID == record.ID)!.Title == "External default", "Schema resynchronization must retain stored data and translations.");
                         Assert(ClassRecord.Delete(item => item.ID == record.ID) == 1 && !ClassRecord.Any(), "Predicate deletes must persist in SQL and invalidate RAM.");
                         using (SqlCommand command = connection.CreateCommand())

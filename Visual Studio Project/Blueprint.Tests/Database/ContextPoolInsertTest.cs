@@ -53,7 +53,7 @@ namespace Blueprint.Tests.Database
                     using (SqlDatabase database = new SqlDatabase(databaseName, settings.ConnectionString, new List<BlueprintLanguage> { new BlueprintLanguage(1, string.Empty) }, poolSize))
                     {
                         database.RAMCacheRefreshInterval = TimeSpan.FromHours(1);
-                        database.RegisterEntity<Product>();
+                        database.RegisterEntities(typeof(Product));
                         List<BlueprintDatabaseContext> reserved = new List<BlueprintDatabaseContext>();
                         try
                         {

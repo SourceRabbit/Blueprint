@@ -28,16 +28,16 @@ namespace Blueprint.Tests.Entities
             {
                 Assert(typeof(BlueprintEntity).IsClass && typeof(BlueprintEntityDB).BaseType == typeof(BlueprintEntity) && typeof(BlueprintEntityRAM).BaseType == typeof(BlueprintEntity), "DB and RAM must be sibling entity base classes.");
                 Assert(typeof(BlueprintEntity).Assembly.GetType("Blueprint.Entities.Annotations.RAMCached") == null, "The cache annotation must be removed from the public assembly.");
-                AssertThrows<ArgumentException>(() => database.RegisterEntity(typeof(BlueprintEntity)), "The common base must not be a registrable entity.");
-                AssertThrows<ArgumentException>(() => database.RegisterEntity<SealedRecord>(), "Sealed classes cannot be dynamically extended.");
-                AssertThrows<ArgumentException>(() => database.RegisterEntity<ConstructorRecord>(), "An accessible parameterless constructor is required.");
-                AssertThrows<ArgumentException>(() => database.RegisterEntity<NonVirtualTranslation>(), "Translations must have overridable accessors.");
-                AssertThrows<ArgumentException>(() => database.RegisterEntity<HiddenIdentity>(), "Hiding the common ID must be rejected.");
-                AssertThrows<ArgumentException>(() => database.RegisterEntity<AbstractMethodRecord>(), "Unimplemented custom methods must be rejected before generation.");
-                AssertThrows<ArgumentException>(() => database.RegisterEntity<UnmarkedRecord>(), "Every registered class must declare Entity explicitly.");
-                AssertThrows<ArgumentException>(() => database.RegisterEntity<UnselectedRecord>(), "Entity classes must choose DB or RAM storage behavior.");
+                AssertThrows<ArgumentException>(() => database.RegisterEntities(typeof(BlueprintEntity)), "The common base must not be a registrable entity.");
+                AssertThrows<ArgumentException>(() => database.RegisterEntities(typeof(SealedRecord)), "Sealed classes cannot be dynamically extended.");
+                AssertThrows<ArgumentException>(() => database.RegisterEntities(typeof(ConstructorRecord)), "An accessible parameterless constructor is required.");
+                AssertThrows<ArgumentException>(() => database.RegisterEntities(typeof(NonVirtualTranslation)), "Translations must have overridable accessors.");
+                AssertThrows<ArgumentException>(() => database.RegisterEntities(typeof(HiddenIdentity)), "Hiding the common ID must be rejected.");
+                AssertThrows<ArgumentException>(() => database.RegisterEntities(typeof(AbstractMethodRecord)), "Unimplemented custom methods must be rejected before generation.");
+                AssertThrows<ArgumentException>(() => database.RegisterEntities(typeof(UnmarkedRecord)), "Every registered class must declare Entity explicitly.");
+                AssertThrows<ArgumentException>(() => database.RegisterEntities(typeof(UnselectedRecord)), "Entity classes must choose DB or RAM storage behavior.");
 
-                database.RegisterEntity<ClassRecord>();
+                database.RegisterEntities(typeof(ClassRecord));
                 Assert(database.TableCount == 2, "Related classes must map to two tables without common base tables or discriminators.");
                 record = ClassRecord.Create();
                 Assert(record is BlueprintEntityRAM && record.GetType().BaseType == typeof(ClassRecord), "Generated entities must derive from the user's class.");
@@ -57,13 +57,45 @@ namespace Blueprint.Tests.Entities
                 string sql = ClassRecord.Where(item => item.Title == "French title" && item.Group!.Name == "Group", 2).Select(item => item.Title).ToQueryString();
                 Assert(sql.Contains("ClassRecords") && sql.Contains("ClassGroups") && sql.Contains("TitleFR"), "Class relationships and translated projections must translate to their physical tables.");
                 Assert(!sql.Contains("Discriminator"), "Class inheritance must not add EF inheritance discriminators.");
-                database.RegisterEntity<ClassGroup>();
+                database.RegisterEntities(typeof(ClassGroup));
                 Assert(database.TableCount == 2 && ClassRecord.Create().Code == "initial", "Repeated registration must preserve the generated model and class constructors.");
                 CheckFromJson();
             }
             CheckJson(record, group);
+            CheckBatchRegistration(languages);
             CheckDescriptionFallbackAfterFromJson();
             Console.WriteLine($"Entity class checks passed: {getAssertionCount()} assertions.");
+        }
+
+        /// <summary>Verifies that a batch synchronizes once and a failed batch cannot leak contracts into a later registration.</summary>
+        /// <param name="languages">The languages for the isolated model.</param>
+        private void CheckBatchRegistration(List<BlueprintLanguage> languages)
+        {
+            using (EntityModelDatabase database = new EntityModelDatabase(languages))
+            {
+                int initialCount = database.SynchronizationCount;
+                database.RegisterEntities(Array.Empty<Type>());
+                AssertThrows<ArgumentNullException>(() => database.RegisterEntities((IEnumerable<Type>)null!), "A null collection must be rejected.");
+                AssertThrows<ArgumentNullException>(() => database.RegisterEntities(typeof(PlainRecord), null!), "A null item must reject the batch.");
+                AssertThrows<ArgumentException>(() => database.RegisterEntities(typeof(PlainRecord), typeof(SealedRecord)), "An invalid item must reject the batch.");
+                Assert(database.SynchronizationCount == initialCount, "Empty and invalid batches must not reach the provider.");
+
+                List<Type> contracts = new List<Type> { typeof(ClassRecord), typeof(DescriptionFallbackProduct), typeof(ClassRecord) };
+                database.RegisterEntities(contracts);
+                Assert(database.SynchronizationCount == initialCount + 1 && database.TableCount == 3, "One call must synchronize distinct roots and their related entities exactly once.");
+                AssertThrows<InvalidOperationException>(() => PlainRecord.Create(), "Invalid batches must not register their valid items.");
+
+                using (BlueprintDatabaseContext context = database.GetContext())
+                {
+                    AssertThrows<InvalidOperationException>(() => database.RegisterEntities(typeof(ClassRecord), typeof(PlainRecord), typeof(ClassGroup)), "A busy context must reject the whole batch.");
+                }
+                database.RegisterEntities(typeof(ClassRecord));
+                Assert(database.SynchronizationCount == initialCount + 3 && ClassRecord.Create().Code == "initial", "Re-registering existing roots must synchronize once and preserve the active model.");
+                database.RegisterEntities(typeof(ClassGroup));
+                AssertThrows<InvalidOperationException>(() => PlainRecord.Create(), "The next synchronization must exclude new contracts from a failed batch.");
+                database.RegisterEntities(typeof(PlainRecord), typeof(ClassGroup));
+                Assert(database.TableCount == 4 && PlainRecord.Create().ID == 0, "Retrying the batch must register its new contract.");
+            }
         }
 
         /// <summary>Checks scalar and multilingual JSON after the database has been disposed.</summary>
@@ -153,7 +185,7 @@ namespace Blueprint.Tests.Entities
             List<BlueprintLanguage> languages = new List<BlueprintLanguage> { new BlueprintLanguage(1, string.Empty), new BlueprintLanguage(2, "GR") };
             using (EntityModelDatabase database = new EntityModelDatabase(languages))
             {
-                database.RegisterEntity<DescriptionFallbackProduct>();
+                database.RegisterEntities(typeof(DescriptionFallbackProduct));
                 foreach (string greekDescriptionJson in new string[] { "null", "\"\"" })
                 {
                     DescriptionFallbackProduct product = DescriptionFallbackProduct.FromJson($$"""
@@ -207,6 +239,7 @@ namespace Blueprint.Tests.Entities
             /// <exception cref="InvalidOperationException">Εμφανίζεται ανεπιθύμητη EF κληρονομικότητα.</exception>
             protected override void SynchronizeEntities()
             {
+                SynchronizationCount++;
                 InitializeContext(new DbContextOptionsBuilder().UseSqlServer(ConnectionString), context =>
                 {
                     fTableCount = context.Model.GetEntityTypes().Count();
@@ -219,6 +252,9 @@ namespace Blueprint.Tests.Entities
                     }
                 });
             }
+
+            /// <summary>Counts provider synchronization attempts, including failed attempts.</summary>
+            internal int SynchronizationCount { get; private set; }
 
             /// <summary>Ο αριθμός των entity mappings του τελευταίου μοντέλου.</summary>
             internal int TableCount

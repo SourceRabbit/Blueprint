@@ -294,7 +294,7 @@ Assign `Code` before insertion. The C# setter remains accessible, but changing a
 
 ## Example contract
 
-This separate contract demonstrates common annotations. Register it with `database.RegisterEntity<Category>()` before using `Category.Create()` or querying it.
+This separate contract demonstrates common annotations. Register it with `database.RegisterEntities(typeof(Category))` before using `Category.Create()` or querying it.
 
 ```csharp
 using Blueprint.Entities.Annotations;

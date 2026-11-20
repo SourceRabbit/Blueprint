@@ -39,7 +39,7 @@ Register entities before running a task that accesses them. Keep the manager ins
 ```csharp
 using (BlueprintDatabase database = new SqlDatabase("MyEshopDatabase", sqlServerConnectionString, languages))
 {
-    database.RegisterEntity<Product>();
+    database.RegisterEntities(typeof(Product));
     using (BackgroundTasksManager manager = new BackgroundTasksManager())
     {
         manager.TaskFailed += (failedTask, exception) =>

@@ -21,8 +21,10 @@ Import `Blueprint.Entities` and `Blueprint.Entities.Annotations`. Keep the full 
 
 ```csharp
 database.RAMCacheRefreshInterval = TimeSpan.FromSeconds(2);
-database.RegisterEntity<Product>();
+database.RegisterEntities(typeof(Product));
 ```
+
+When startup collects types from several modules, pass the complete collection to `database.RegisterEntities(entityTypes)`. Each nonempty call rebuilds the RAM cache, so separate calls can read the same table repeatedly.
 
 Registration loads **every row and every translation** of every discovered `BlueprintEntityRAM` contract before returning, including RAM entities discovered through relationships. Related `BlueprintEntityDB` tables remain in SQL. There is no lazy first-query loading, row limit, eviction policy, or automatic memory cap. A filtered query does not reduce the amount of data held by the cache. Choose tables whose complete contents fit your memory and startup budget.
 

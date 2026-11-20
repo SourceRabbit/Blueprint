@@ -122,11 +122,7 @@ namespace BlueprintManual
             using (db)
             {
                 // Register the entities used by the shop.
-                db.RegisterEntity<Product>();
-                db.RegisterEntity<WebsiteUser>();
-                db.RegisterEntity<BasketItem>();
-                db.RegisterEntity<Order>();
-                db.RegisterEntity<OrderItem>();
+                db.RegisterEntities(typeof(Product), typeof(WebsiteUser), typeof(BasketItem), typeof(Order), typeof(OrderItem));
 
                 fDatabase = db;
 
@@ -413,11 +409,7 @@ languages.Add(fGreekLanguage);
 Inside `using (db)`, register the contracts and keep the database reference for transactions:
 
 ```csharp
-db.RegisterEntity<Product>();
-db.RegisterEntity<WebsiteUser>();
-db.RegisterEntity<BasketItem>();
-db.RegisterEntity<Order>();
-db.RegisterEntity<OrderItem>();
+db.RegisterEntities(typeof(Product), typeof(WebsiteUser), typeof(BasketItem), typeof(Order), typeof(OrderItem));
 
 fDatabase = db;
 ```

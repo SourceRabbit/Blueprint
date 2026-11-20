@@ -39,7 +39,7 @@ namespace Blueprint.Tests.RAMCache
                     using (BlueprintDatabase database = new SqlDatabase(databaseName, settings.ConnectionString, languages))
                     {
                         database.RAMCacheRefreshInterval = fLongRefreshInterval;
-                        database.RegisterEntity<CachedRecord>();
+                        database.RegisterEntities(typeof(CachedRecord));
                         settings.InitialCatalog = databaseName;
                         using (SqlConnection writer = new SqlConnection(settings.ConnectionString))
                         {

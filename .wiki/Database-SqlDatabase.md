@@ -124,7 +124,7 @@ BlueprintDatabase db = new SqlDatabase("MyEshopDatabase", sqlServerConnectionStr
 
 The name argument overrides any `Database` or `Initial Catalog` value in the supplied connection string. Supplying a different database name only in that string does not select a different application database.
 
-Construction connects immediately. The current provider first connects to `master` to check for and, if necessary, create the named database, then initializes the application context. The account therefore needs access to `master` and the application database, plus database-creation permissions if the database is missing. Connection failures can occur before `RegisterEntity<Product>()` is called.
+Construction connects immediately. The current provider first connects to `master` to check for and, if necessary, create the named database, then initializes the application context. The account therefore needs access to `master` and the application database, plus database-creation permissions if the database is missing. Connection failures can occur before `RegisterEntities(typeof(Product))` is called.
 
 The provider requires a server value, rejects `AttachDBFilename`, and does not accept `master`, `model`, `msdb`, or `tempdb` as the application database. Database names must contain 1 to 128 characters without leading or trailing whitespace or control characters. These rules come from the [SqlDatabase implementation](../Visual%20Studio%20Project/Blueprint/Database/Sql/SqlDatabase.cs).
 
@@ -169,7 +169,7 @@ namespace BlueprintManual
             db.RAMCacheRefreshInterval = TimeSpan.FromSeconds(5);
             using (db)
             {
-                db.RegisterEntity<Product>();
+                db.RegisterEntities(typeof(Product));
 
                 // Step 4 - Insert sample iPhones into the database.
                 InsertProductsToDatabase();
@@ -270,13 +270,13 @@ The refresh interval configures polling while the database is active. This conso
 
 ## Register entity contracts
 
-Use `database.RegisterEntity<Product>()` to add a contract. The equivalent overload is `database.RegisterEntity(typeof(Product))`; these are alternative forms of the same registration.
+Use `database.RegisterEntities(typeof(Product))` for one contract. Pass all startup types to the same call, individually or as a collection, to synchronize the schema and load the RAM tables once.
 
 Each contract must be a public, non-sealed class deriving from `BlueprintEntityDB` or `BlueprintEntityRAM`, marked with `[Entity]`. Related entity contracts are discovered from registered contracts; Blueprint does not scan all loaded assemblies for entities.
 
 Registration performs provider work immediately. With SQL Server, it synchronizes the schema and loads every discovered `BlueprintEntityRAM` table, including its translations, before returning. Related DB entities remain SQL-backed. Repeating registration for the same type synchronizes again without adding a duplicate registration.
 
-New contracts can also be registered through `database` after database initialization. If synchronization or cache loading fails, a newly added registration is removed and the previous active model and cache remain available. This does not mean every SQL Server configuration change is undone; see [Schema Synchronization](Database-SchemaSynchronization.md) and [RAM Caching](Database-RAMCaching.md) for details.
+New contracts can also be registered after initialization. If synchronization or cache loading fails, Blueprint removes the new registrations in that batch and retains the previous active model and cache. See [Schema Synchronization](Database-SchemaSynchronization.md) and [RAM Caching](Database-RAMCaching.md) for SQL-side effects.
 
 ## Shared properties and services
 
@@ -285,7 +285,7 @@ New contracts can also be registered through `database` after database initializ
 | `Name` | Gets the configured database name. It has no setter. |
 | `ConnectionString` | Gets the provider's connection settings. It has no setter; SQL Server stores the connection string with the configured database name. |
 | `RAMCacheRefreshInterval` | Gets or sets the interval for checking external changes to RAM-cached data. The default is one second. |
-| `RegisterEntity<TEntity>()` / `RegisterEntity(Type)` | Registers a contract and synchronizes the provider's model, schema, and optional cache. |
+| `RegisterEntities(params IEnumerable<Type> entityTypes)` | Registers the supplied contracts and synchronizes the schema and RAM cache once per nonempty call. |
 | `Languages` | Gets the independent, read-only language configuration. |
 | `Dispose()` | Clears the active database, releases resources, and prevents further data operations. |
 

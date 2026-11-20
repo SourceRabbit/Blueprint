@@ -1,11 +1,11 @@
 # Schema Synchronization
 
-`RegisterEntity` compares the registered model with SQL Server and applies supported schema changes immediately. Blueprint does not require a separate EF migration command or migration-history table for this synchronization.
+`RegisterEntities` compares the registered model with SQL Server and applies supported schema changes immediately. Blueprint does not require a separate EF migration command or migration-history table for this synchronization.
 
 ## Trigger synchronization
 
 ```csharp
-database.RegisterEntity<Product>();
+database.RegisterEntities(typeof(Product));
 ```
 
 The database constructor creates a missing database. Registration then prepares the entity tables, related contracts, indexes, ID sequences, and any configured RAM caches. A repeated registration checks the model again.
@@ -38,7 +38,7 @@ A removed column can still affect writes: an old required column without a usabl
 
 ## Atomicity and failures
 
-Schema changes are protected by a SQL transaction and an application lock, with table locking where needed. If synchronization fails, schema changes in that transaction are rolled back. The previous active model is retained, and a newly added registration is removed.
+Schema changes are protected by a SQL transaction and an application lock, with table locking where needed. If synchronization fails, schema changes in that transaction are rolled back. Blueprint retains the previous active model and removes all new registrations from the failed batch.
 
 RAM-cache prerequisites include database-level Change Tracking and snapshot-isolation settings. These can be enabled before the schema transaction and remain enabled if a later step fails. See [RAM Caching](Database-RAMCaching.md#sql-server-requirements).
 

@@ -54,7 +54,7 @@ For example, with the connection settings, languages, and Product contract alrea
 ```csharp
 using (BlueprintDatabase db = new SqlDatabase("MyEshopDatabase", sqlServerConnectionString, languages))
 {
-    db.RegisterEntity<Product>();
+    db.RegisterEntities(typeof(Product));
 }
 ```
 

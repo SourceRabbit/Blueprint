@@ -64,7 +64,7 @@ namespace Blueprint.Tests.Lifecycle
                 Assert(database.Languages.Count == 2, "The database must own its language snapshot.");
                 AssertThrows<NotSupportedException>(() => ((IList<BlueprintLanguage>)database.Languages).Clear(), "Languages must be read-only.");
                 AssertThrows<InvalidOperationException>(() => LifecycleRecord.Create(), "Entities must be registered before use.");
-                database.RegisterEntity<LifecycleRecord>();
+                database.RegisterEntities(typeof(LifecycleRecord));
                 LifecycleRecord record = LifecycleRecord.Create();
                 Assert(record.CurrentLanguage == 7, "Entity creation must use the database's default language.");
                 record.Title = "Default";
@@ -76,7 +76,7 @@ namespace Blueprint.Tests.Lifecycle
                 Assert(previousQuery.ToQueryString().Contains("LifecycleRecords"), "Entity queries must use the active database model.");
                 AssertThrows<InvalidOperationException>(() => new ModelDatabase(CreateLanguages()), "A second active database must be rejected.");
                 Assert(LifecycleRecord.Create().CurrentLanguage == 7, "Rejected activation must preserve the original database.");
-                database.RegisterEntity<LifecycleRecord>();
+                database.RegisterEntities(typeof(LifecycleRecord));
                 Assert(LifecycleRecord.Create().CurrentLanguage == 7, "Repeated registration must preserve activation.");
                 using (BackgroundTasksManager manager = new BackgroundTasksManager())
                 {
@@ -89,7 +89,7 @@ namespace Blueprint.Tests.Lifecycle
             AssertThrows<NullReferenceException>(() => previousQuery.ToList(), "Deferred queries must reject a missing active database.");
             using (ModelDatabase database = new ModelDatabase(CreateLanguages()))
             {
-                database.RegisterEntity<LifecycleRecord>();
+                database.RegisterEntities(typeof(LifecycleRecord));
                 previousDatabase.Dispose();
                 Assert(LifecycleRecord.Create().CurrentLanguage == 7, "Repeated disposal must not clear a replacement database.");
             }
@@ -106,7 +106,7 @@ namespace Blueprint.Tests.Lifecycle
             using (ManualResetEventSlim acquired = new ManualResetEventSlim())
             using (ManualResetEventSlim finish = new ManualResetEventSlim())
             {
-                database.RegisterEntity<LifecycleRecord>();
+                database.RegisterEntities(typeof(LifecycleRecord));
                 LifecycleRecord record = LifecycleRecord.Create();
                 record.ID = 42;
                 BlueprintDatabaseContext[] contexts = new BlueprintDatabaseContext[5];
@@ -167,7 +167,7 @@ namespace Blueprint.Tests.Lifecycle
                     AssertThrows<ArgumentException>(() => LifecycleRecord.Update(new LifecycleRecord[] { null! }), "Failed entity operations must not leak pool entries.");
                     Assert(LifecycleRecord.Create().CurrentLanguage == 7, "Entity operations must continue to acquire and return contexts.");
                 }
-                database.RegisterEntity<LifecycleRecord>();
+                database.RegisterEntities(typeof(LifecycleRecord));
                 using (BlueprintDatabaseContext context = database.GetContext())
                 {
                     Assert(context.Model.GetEntityTypes().Any(), "Schema synchronization must leave an initialized pool.");
@@ -302,7 +302,7 @@ namespace Blueprint.Tests.Lifecycle
                 {
                     Assert(databases.Count(database => database != null) == 1, "Exactly one concurrent constructor must activate its database.");
                     ModelDatabase database = databases.Single(database => database != null)!;
-                    database.RegisterEntity<LifecycleRecord>();
+                    database.RegisterEntities(typeof(LifecycleRecord));
                     Assert(LifecycleRecord.Create().CurrentLanguage == 7, "The losing constructor must not clear the winner's activation.");
                 }
                 finally
@@ -423,7 +423,7 @@ namespace Blueprint.Tests.Lifecycle
                 {
                     using (BlueprintDatabase database = new SqlDatabase(databaseName, settings.ConnectionString, CreateLanguages()))
                     {
-                        database.RegisterEntity<LifecycleRecord>();
+                        database.RegisterEntities(typeof(LifecycleRecord));
                         LifecycleRecord first = LifecycleRecord.Create();
                         first.Title = "First";
                         first.CurrentLanguage = 9;

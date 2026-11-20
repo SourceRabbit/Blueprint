@@ -51,7 +51,7 @@ namespace Blueprint.Tests.Performance
                     database.RAMCacheRefreshInterval = TimeSpan.FromHours(1);
 
                     Stopwatch stopwatch = Stopwatch.StartNew();
-                    database.RegisterEntity<Product>();
+                    database.RegisterEntities(typeof(Product));
                     stopwatch.Stop();
 
                     List<Product> products = Product.Where(product => true).ToList();

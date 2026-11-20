@@ -42,11 +42,10 @@ namespace Blueprint.Tests.Localization
                     using (BlueprintDatabase database = new SqlDatabase(databaseName, settings.ConnectionString, languages))
                     {
                         database.RAMCacheRefreshInterval = TimeSpan.FromHours(1);
-                        AssertThrows<ArgumentException>(() => database.RegisterEntity<UntranslatedFallback>(), "Fallback must require Multilingual.");
-                        AssertThrows<ArgumentException>(() => database.RegisterEntity<NonStringFallback>(), "Fallback must require a string translation.");
-                        AssertThrows<ArgumentException>(() => database.RegisterEntity<UnmappedFallback>(), "Fallback must reject unmapped translations.");
-                        database.RegisterEntity<SqlFallbackRecord>();
-                        database.RegisterEntity<CachedFallbackRecord>();
+                        AssertThrows<ArgumentException>(() => database.RegisterEntities(typeof(UntranslatedFallback)), "Fallback must require Multilingual.");
+                        AssertThrows<ArgumentException>(() => database.RegisterEntities(typeof(NonStringFallback)), "Fallback must require a string translation.");
+                        AssertThrows<ArgumentException>(() => database.RegisterEntities(typeof(UnmappedFallback)), "Fallback must reject unmapped translations.");
+                        database.RegisterEntities(typeof(SqlFallbackRecord), typeof(CachedFallbackRecord));
                         CheckContract<SqlFallbackRecord>(database, connection, databaseName, "FallbackSqlRecords");
                         CheckContract<CachedFallbackRecord>(database, connection, databaseName, "FallbackCachedRecords");
                         CheckRelatedReads(database);
@@ -274,7 +273,7 @@ namespace Blueprint.Tests.Localization
         /// <exception cref="Exception">Αποτυγχάνει ο έλεγχος σχέσης ή η επικοινωνία με τη βάση.</exception>
         private void CheckRelatedReads(BlueprintDatabase database)
         {
-            database.RegisterEntity<FallbackReference>();
+            database.RegisterEntities(typeof(FallbackReference));
             SqlFallbackRecord product = SqlFallbackRecord.Where(item => item.Code == 0).Single();
             FallbackReference reference = FallbackReference.Create();
             reference.ProductID = product.ID;

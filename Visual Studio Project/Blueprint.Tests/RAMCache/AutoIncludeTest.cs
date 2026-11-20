@@ -30,7 +30,7 @@ namespace Blueprint.Tests.RAMCache
             {
                 using BlueprintDatabase database = new SqlDatabase(databaseName, settings.ConnectionString, new List<BlueprintLanguage> { new BlueprintLanguage(1, string.Empty), new BlueprintLanguage(2, "EN") });
                 database.RAMCacheRefreshInterval = TimeSpan.FromHours(1);
-                database.RegisterEntity<IncludedProduct>();
+                database.RegisterEntities(typeof(IncludedProduct));
                 settings.InitialCatalog = databaseName;
                 using SqlConnection writer = new SqlConnection(settings.ConnectionString);
                 writer.Open();

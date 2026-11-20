@@ -27,7 +27,7 @@ namespace Blueprint.Database.Sql.RAMCache
         private readonly Dictionary<string, ILookup<object?, long>> fForeignKeyIndexes = new(StringComparer.Ordinal);
         private readonly string fTableName;
         private readonly string fKeyColumn;
-        private readonly Func<BlueprintDatabaseContext, string, object[], List<BlueprintEntity>> fReadRows;
+        private readonly Func<BlueprintDatabaseContext, string, object[], IEnumerable<BlueprintEntity>> fReadRows;
         private Dictionary<long, BlueprintEntity> fRows = new Dictionary<long, BlueprintEntity>();
         private Dictionary<long, int>? fRowPositions;
         private long? fVersion;
@@ -49,7 +49,7 @@ namespace Blueprint.Database.Sql.RAMCache
             fTableName = sqlHelper.DelimitIdentifier(entityType.GetTableName()!, entityType.GetSchema());
             StoreObjectIdentifier store = StoreObjectIdentifier.Table(entityType.GetTableName()!, entityType.GetSchema());
             fKeyColumn = sqlHelper.DelimitIdentifier(entityType.FindPrimaryKey()!.Properties.Single().GetColumnName(store)!);
-            fReadRows = typeof(RAMCachedTable).GetMethod(nameof(ReadRows), BindingFlags.NonPublic | BindingFlags.Static)!.MakeGenericMethod(fConcreteType).CreateDelegate<Func<BlueprintDatabaseContext, string, object[], List<BlueprintEntity>>>();
+            fReadRows = typeof(RAMCachedTable).GetMethod(nameof(ReadRows), BindingFlags.NonPublic | BindingFlags.Static)!.MakeGenericMethod(fConcreteType).CreateDelegate<Func<BlueprintDatabaseContext, string, object[], IEnumerable<BlueprintEntity>>>();
         }
 
         /// <summary>Prepares a new snapshot using a delta or a full reload when the previous version is no longer valid.</summary>
@@ -287,10 +287,10 @@ namespace Blueprint.Database.Sql.RAMCache
         /// <param name="context">The snapshot transaction context.</param>
         /// <param name="sql">The SQL with safely delimited identifiers.</param>
         /// <param name="parameters">The Change Tracking parameters.</param>
-        /// <returns>The stored rows without tracking or relationships.</returns>
-        private static List<BlueprintEntity> ReadRows<TEntity>(BlueprintDatabaseContext context, string sql, object[] parameters) where TEntity : BlueprintEntity
+        /// <returns>Untracked rows to enumerate within the snapshot transaction.</returns>
+        private static IEnumerable<BlueprintEntity> ReadRows<TEntity>(BlueprintDatabaseContext context, string sql, object[] parameters) where TEntity : BlueprintEntity
         {
-            return context.Set<TEntity>().FromSqlRaw(sql, parameters).AsNoTracking().ToList().Cast<BlueprintEntity>().ToList();
+            return context.Set<TEntity>().FromSqlRaw(sql, parameters).AsNoTracking();
         }
 
         /// <summary>Finds a mapped long primary key or single-column foreign key by its entity property name.</summary>

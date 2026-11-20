@@ -137,7 +137,7 @@ Entity class inheritance does not introduce SQL inheritance tables or discrimina
 Initialize the database as described in [SQL Server](Database-SqlDatabase.md). Inside its lifetime, register the contract before using its Entity API. The following statements assume an active `database` and run where `CatalogItem` is in scope, with `Blueprint.Entities` imported:
 
 ```csharp
-database.RegisterEntity<CatalogItem>();
+database.RegisterEntities(typeof(CatalogItem));
 
 CatalogItem item = CatalogItem.Create();
 item.Code = "CAMERA-001";

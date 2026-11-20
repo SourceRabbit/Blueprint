@@ -24,7 +24,7 @@ namespace Blueprint.Tests.Queries
             IQueryable<ExecutorProduct> deferred;
             using (QueryModelDatabase database = new QueryModelDatabase())
             {
-                database.RegisterEntity<ExecutorProduct>();
+                database.RegisterEntities(typeof(ExecutorProduct));
                 deferred = ExecutorProduct.Where(product => product.Price == 10m);
                 string priceSql = deferred.ToQueryString();
                 Assert(priceSql.Contains("QueryExecutorProducts") && priceSql.Contains("[Price] = 10"), "Entity filters must reach the SQL provider through the original query root.");
@@ -58,7 +58,7 @@ namespace Blueprint.Tests.Queries
                 AssertThrows<ArgumentOutOfRangeException>(() => ExecutorProduct.Where(product => product.Price == 10m, 999).ToQueryString(), "Query routing must retain language validation.");
                 CheckCommands();
                 CheckConcurrentEntityQueries();
-                database.RegisterEntity<ExecutorCategory>();
+                database.RegisterEntities(typeof(ExecutorCategory));
                 Assert(deferred.ToQueryString() == priceSql, "A deferred query must resolve the current context after registering another entity.");
                 Assert(translated.ToQueryString().Contains("[TitleFR]"), "Recreated contexts must preserve the language of existing queries.");
             }
@@ -66,7 +66,7 @@ namespace Blueprint.Tests.Queries
             AssertThrows<NullReferenceException>(() => ((System.Collections.IEnumerable)deferred).GetEnumerator(), "Non-generic enumeration must reject a missing active database.");
             using (QueryModelDatabase replacement = new QueryModelDatabase())
             {
-                replacement.RegisterEntity<ExecutorProduct>();
+                replacement.RegisterEntities(typeof(ExecutorProduct));
                 Assert(deferred.ToQueryString().Contains("[Price] = 10"), "Deferred queries must resolve the currently active database at execution time.");
             }
             Console.WriteLine($"Query executor translation checks passed: {getAssertionCount()} assertions.");

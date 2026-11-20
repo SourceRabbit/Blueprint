@@ -59,7 +59,7 @@ namespace QueryExecutorExample
 With the database initialized, the contracts in scope, and `System.Linq` and `System.Collections.Generic` imported:
 
 ```csharp
-database.RegisterEntity<Product>();
+database.RegisterEntities(typeof(Product));
 IQueryable<Product> query = Product.Where(p => p.ReleaseYear == 2026 && p.Price < 200m);
 List<Product> products = query.OrderBy(p => p.Price).ThenBy(p => p.ID).Take(20).ToList();
 int count = query.Count();

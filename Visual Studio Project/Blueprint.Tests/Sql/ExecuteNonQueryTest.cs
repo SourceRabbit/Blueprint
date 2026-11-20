@@ -37,7 +37,7 @@ namespace Blueprint.Tests.Sql
                     using (BlueprintDatabase database = new SqlDatabase(databaseName, settings.ConnectionString, languages))
                     {
                         database.RAMCacheRefreshInterval = TimeSpan.FromHours(1);
-                        database.RegisterEntity<CachedRecord>();
+                        database.RegisterEntities(typeof(CachedRecord));
                         CheckCommands(database);
                         CheckValidation(database);
                         CheckTransactions(database);

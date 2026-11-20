@@ -79,42 +79,40 @@ namespace Blueprint.Database
         /// <exception cref="DbException">The provider cannot open the connection or execute the command.</exception>
         public abstract int ExecuteNonQuery(string commandText, IReadOnlyList<DbParameter>? parameters = null, int? commandTimeoutSeconds = null);
 
-        /// <summary>Registers a contract and immediately synchronizes the schema and optional cache.</summary>
-        /// <typeparam name="TEntity">The class carrying EntityAttribute.</typeparam>
-        /// <exception cref="ArgumentException">The contract is invalid.</exception>
-        /// <exception cref="Exception">Provider synchronization fails without replacing the previously active model.</exception>
-        public void RegisterEntity<TEntity>() where TEntity : BlueprintEntity
-        {
-            RegisterEntity(typeof(TEntity));
-        }
-
-        /// <summary>Registers an entity class and synchronizes the model, reverting the registration if the provider fails.</summary>
-        /// <param name="entityType">The entity class.</param>
-        /// <remarks>Registering the same type again resynchronizes the schema and cache without duplicates.</remarks>
-        /// <exception cref="ArgumentNullException">No entity type was provided.</exception>
-        /// <exception cref="ArgumentException">The type is not a valid contract.</exception>
+        /// <summary>Registers a batch of entity contracts and synchronizes the schema and RAM cache once.</summary>
+        /// <param name="entityTypes">The contracts, supplied individually or as a collection.</param>
+        /// <remarks>An empty batch is a no-op. A nonempty batch resynchronizes even previously registered contracts.</remarks>
+        /// <exception cref="ArgumentNullException">The collection or one of its elements is null.</exception>
+        /// <exception cref="ArgumentException">An entity type is not a valid contract.</exception>
         /// <exception cref="ObjectDisposedException">The database has been disposed.</exception>
         /// <exception cref="Exception">Synchronization or cache loading fails.</exception>
-        public void RegisterEntity(Type entityType)
+        public void RegisterEntities(params IEnumerable<Type> entityTypes)
         {
             lock (fSyncRoot)
             {
                 ObjectDisposedException.ThrowIf(fIsDisposed, this);
-                ArgumentNullException.ThrowIfNull(entityType);
-                BlueprintEntityTypes.Validate(entityType);
+                ArgumentNullException.ThrowIfNull(entityTypes);
+                HashSet<Type> addedTypes = new HashSet<Type>(entityTypes);
+                if (addedTypes.Count == 0)
+                {
+                    return;
+                }
+                foreach (Type entityType in addedTypes)
+                {
+                    ArgumentNullException.ThrowIfNull(entityType);
+                    BlueprintEntityTypes.Validate(entityType);
+                }
+                addedTypes.ExceptWith(fEntityTypes);
                 bool wasModelChanged = fModelChanged;
-                bool wasAdded = fEntityTypes.Add(entityType);
-                fModelChanged |= wasAdded;
+                fEntityTypes.UnionWith(addedTypes);
+                fModelChanged |= addedTypes.Count > 0;
                 try
                 {
                     SynchronizeEntities();
                 }
                 catch
                 {
-                    if (wasAdded)
-                    {
-                        fEntityTypes.Remove(entityType);
-                    }
+                    fEntityTypes.ExceptWith(addedTypes);
                     fModelChanged = wasModelChanged;
                     throw;
                 }
@@ -303,7 +301,7 @@ namespace Blueprint.Database
         /// <exception cref="InvalidOperationException">The entity must be registered and initialized.</exception>
         internal static Type ResolveType<TEntity>(BlueprintDatabaseContext context) where TEntity : BlueprintEntity
         {
-            return context.EntityTypes.Types.TryGetValue(typeof(TEntity), out Type? type) ? type : throw new InvalidOperationException($"Entity '{typeof(TEntity)}' is not registered. Call RegisterEntity() first.");
+            return context.EntityTypes.Types.TryGetValue(typeof(TEntity), out Type? type) ? type : throw new InvalidOperationException($"Entity '{typeof(TEntity)}' is not registered. Call RegisterEntities first.");
         }
 
         /// <summary>Initializes the schema and publishes a pool of the configured size sharing the same entity model.</summary>

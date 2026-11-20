@@ -94,7 +94,7 @@ For example, `database.RAMCacheRefreshInterval = TimeSpan.FromSeconds(20)` reque
 | Method | Purpose |
 | --- | --- |
 | [ExecuteNonQuery(commandText, parameters, commandTimeoutSeconds)](#executenonquery) | Abstract method for executing provider-specific SQL on an independent connection. |
-| [RegisterEntity&lt;TEntity&gt;()](#registerentity) / [RegisterEntity(Type)](#registerentity) | Registers an entity contract and immediately invokes provider synchronization. |
+| [RegisterEntities](#registerentities) | Registers a batch of contracts and synchronizes the provider once. |
 | [Create&lt;TEntity&gt;()](#create) | Creates an unsaved entity; application code normally uses the entity's `Create()` method. |
 | [Dispose()](#dispose) | Releases resources, clears this instance's active registration, and prevents new data operations. |
 
@@ -140,28 +140,26 @@ Console.WriteLine($"Affected rows: {affectedRows}");
 
 Replace `123` with the intended existing product ID; an unmatched ID affects zero rows. Direct SQL does not add the entity's concurrency check or multilingual mapping. See [SQL Server: Execute SQL commands](Database-SqlDatabase.md#execute-sql-commands) for parameter ownership, cache synchronization, and lifetime behavior.
 
-### RegisterEntity
+### RegisterEntities
 
-Register a contract with `database.RegisterEntity<Product>()` or the equivalent `database.RegisterEntity(typeof(Product))`. A contract must be a public, non-sealed class deriving from `BlueprintEntityDB` or `BlueprintEntityRAM` and marked with `[Entity]`. See [BlueprintEntity](Entitites-BlueprintEntity.md) for contract definitions.
-
-Both overloads return `void`. The generic overload takes the contract as `TEntity`; the other overload accepts an `entityType` parameter of type `Type`. A null or invalid contract is rejected, and registration after disposal throws `ObjectDisposedException`.
-
-The base class validates and records the contract, then calls the protected abstract `SynchronizeEntities()` method implemented by the provider. Registration performs synchronization immediately; it does not defer initialization until the first query. Registering the same contract again synchronizes it again without creating a duplicate registration.
-
-With SQL Server, synchronization updates the schema and loads the selected RAM-cached tables before registration returns. If synchronization fails, the newly added registration is removed and the previous active model and cache remain available. Provider configuration changes have their own rollback limits; see [Schema Synchronization](Database-SchemaSynchronization.md) and [RAM Caching](Database-RAMCaching.md).
-
-Use the generic overload when the contract is known at compile time:
+`void RegisterEntities(params IEnumerable<Type> entityTypes)` accepts individual types or a collection. Pass all startup contracts in one call so the provider synchronizes the schema once and loads each discovered RAM table once. Each contract must be a public, non-sealed class derived from `BlueprintEntityDB` or `BlueprintEntityRAM` and marked with `[Entity]`. See [BlueprintEntity](Entitites-BlueprintEntity.md).
 
 ```csharp
-database.RegisterEntity<Product>();
+database.RegisterEntities(typeof(Product), typeof(WebsiteUser));
 ```
 
-Use the `Type` overload when the application holds the contract as a runtime type. This is an alternative to the previous call, not an additional required registration:
+An application that collects contracts from modules can pass the collection directly.
 
 ```csharp
-Type entityType = typeof(Product);
-database.RegisterEntity(entityType);
+IEnumerable<Type> entityTypes = new Type[] { typeof(Product), typeof(WebsiteUser) };
+database.RegisterEntities(entityTypes);
 ```
+
+**Upgrading an existing project.** Replace `database.RegisterEntity<Product>()` with `database.RegisterEntities(typeof(Product))`. Replace a loop that calls `database.RegisterEntity(entityType)` for each type with one call to `database.RegisterEntities(entityTypes)`. Rebuild projects compiled against the removed methods.
+
+Duplicate types within a batch are registered once. An empty batch skips synchronization. A later nonempty call synchronizes the accumulated model again, even if every type was already registered.
+
+A null collection, a null element, or an invalid contract rejects the entire batch. Registration on a disposed database throws `ObjectDisposedException`. If provider synchronization fails, Blueprint removes all new registrations from that batch and retains the previous active model and cache. See [Schema Synchronization](Database-SchemaSynchronization.md) and [RAM Caching](Database-RAMCaching.md) for SQL-side effects.
 
 ### Create
 
@@ -199,7 +197,7 @@ string connectionString = "Server=.;Integrated Security=True;Encrypt=True;TrustS
 List<BlueprintLanguage> languages = new List<BlueprintLanguage> { new BlueprintLanguage(1, string.Empty) };
 using (BlueprintDatabase database = new SqlDatabase("MyEshopDatabase", connectionString, languages))
 {
-    database.RegisterEntity<Product>();
+    database.RegisterEntities(typeof(Product));
     Console.WriteLine($"Database ready: {database.Name}");
 }
 ```
