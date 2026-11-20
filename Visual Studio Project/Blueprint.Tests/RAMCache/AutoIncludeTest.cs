@@ -36,6 +36,7 @@ namespace Blueprint.Tests.RAMCache
                 writer.Open();
                 CheckIncludes(database, writer);
                 CheckParentProductLookup(database, writer);
+                CheckReferencePaging(database, writer);
             }
             finally
             {
@@ -192,6 +193,49 @@ namespace Blueprint.Tests.RAMCache
             Assert(variants.Single().ID == 2, "A deleted variant must leave the index after synchronization.");
         }
 
+        /// <summary>Checks reference ordering and counts the product instances created by a paged entity query.</summary>
+        /// <param name="database">The isolated database holding the cached entities.</param>
+        /// <param name="writer">The connection used to populate the fixture and change a rate.</param>
+        /// <exception cref="Exception">A query, refresh or assertion failed.</exception>
+        private void CheckReferencePaging(BlueprintDatabase database, SqlConnection writer)
+        {
+            ExecuteSql(writer, """
+                INSERT dbo.IncludeVatCategories (ID, Rate, Title, TitleEN)
+                VALUES (10, 24, N'B', NULL), (20, 13, N'C', N'A'), (30, 24, N'A', N'Z');
+                WITH numbers AS (
+                    SELECT TOP (23997) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n
+                    FROM sys.all_objects AS a CROSS JOIN sys.all_objects AS b
+                )
+                INSERT dbo.IncludeProducts (ID, VatCategoryID, BrandID)
+                SELECT 10000 + n, CASE n % 4 WHEN 1 THEN 10 WHEN 2 THEN 20 WHEN 3 THEN 30 END, 1 FROM numbers;
+                """);
+            IQueryable<IncludedProduct> products = IncludedProduct.Where(product => product.ID > 10000, 2);
+            WaitForRefresh(database, () => products.Count() == 23997);
+            IQueryable<IncludedProduct> descending = products.OrderByDescending(product => product.VatCategory == null ? (decimal?)null : product.VatCategory.Rate).ThenBy(product => product.ID);
+            int before = IncludedProduct.fInstanceCount;
+            IncludedProduct[] page = descending.Skip(25).Take(26).ToArray();
+            Assert(IncludedProduct.fInstanceCount - before == 26, "A 26-row VAT page must create only 26 products for 23,997 candidates.");
+            long[] expected = Enumerable.Range(0, 26).Select(index => 10051L + 2 * index).ToArray();
+            Assert(page.Select(product => product.ID).SequenceEqual(expected) && page.All(product => product.VatCategory!.Rate == 24m), "Equal rates in different categories must interleave by product ID across page boundaries.");
+            Assert(products.OrderBy(product => product.VatCategory == null ? (decimal?)null : product.VatCategory.Rate).ThenBy(product => product.ID).First().ID == 10004, "Ascending order must select the first missing reference.");
+            Assert(products.Where(product => product.VatCategoryID.HasValue).OrderBy(product => product.VatCategory!.Title).ThenBy(product => product.ID).First().ID == 10002, "Ordering must read the selected translation and its fallback from the target snapshot.");
+            AssertThrows<NullReferenceException>(() => products.OrderBy(product => product.VatCategory!.Rate).Take(1).ToArray(), "An unguarded reference must preserve its null dereference.");
+            bool refreshed = false;
+            IComparer<decimal?> comparer = Comparer<decimal?>.Create((left, right) =>
+            {
+                if (!refreshed)
+                {
+                    refreshed = true;
+                    ExecuteSql(writer, "UPDATE dbo.IncludeVatCategories SET Rate = CASE ID WHEN 10 THEN 0 ELSE 42 END WHERE ID IN (10, 20);");
+                    WaitForRefresh(database, () => IncludedVatCategory.Where(category => category.ID == 20).Select(category => category.Rate).Single() == 42m);
+                }
+                return Nullable.Compare(left, right);
+            });
+            IncludedProduct[] retained = products.OrderByDescending(product => product.VatCategory == null ? (decimal?)null : product.VatCategory.Rate, comparer).ThenBy(product => product.ID).Take(2).ToArray();
+            Assert(refreshed && retained[0].ID == 10001 && retained[0].VatCategory!.Rate == 24m && retained[1].ID == 10003, "A refresh during sorting must preserve the rates that determined the returned page.");
+            Assert(descending.First().ID == 10002 && descending.Skip(0).Take(1).ToArray()[0].VatCategory!.Rate == 42m, "Reused ordering must bind the refreshed target snapshot.");
+        }
+
         /// <summary>Returns the populated parent index so a test can distinguish reuse from rebuilding an equivalent index.</summary>
         /// <param name="database">The database that owns the cached product table.</param>
         /// <returns>The actual lookup used by the product table.</returns>
@@ -276,6 +320,14 @@ namespace Blueprint.Tests.RAMCache
     [Entity("IncludeProducts")]
     public abstract class IncludedProduct : BlueprintEntityRAM
     {
+        internal static int fInstanceCount;
+
+        /// <summary>Counts product allocations so paging tests can detect copies of unselected rows.</summary>
+        protected IncludedProduct()
+        {
+            Interlocked.Increment(ref fInstanceCount);
+        }
+
         [Multilingual]
         public abstract string? Title { get; set; }
         public abstract long? ParentProductID { get; set; }

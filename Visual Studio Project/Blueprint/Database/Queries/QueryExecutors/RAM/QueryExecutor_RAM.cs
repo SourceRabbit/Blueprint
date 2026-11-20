@@ -278,7 +278,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
             {
                 return false;
             }
-            if (!TryCreatePage(call.Arguments[0], table, context.EntityTypes.DefaultLanguageID, out Func<IEnumerable<BlueprintEntity>, IEnumerable<BlueprintEntity>>? selection))
+            if (!TryCreatePage(call.Arguments[0], table, context, out Func<IEnumerable<BlueprintEntity>, IEnumerable<BlueprintEntity>>? selection, out IReadOnlyDictionary<Type, CachedReference>? references))
             {
                 return false;
             }
@@ -304,7 +304,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
             element = stored == null ? null : table.Copy(stored, fLanguage);
             if (element is BlueprintEntity entity)
             {
-                EntityIncludes.Load(context, new[] { entity }, fLanguage);
+                EntityIncludes.Load(context, new[] { entity }, fLanguage, references);
             }
             return true;
         }
@@ -319,7 +319,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
         private bool TryExecutePage<TElement>(RAMCachedTable table, BlueprintDatabaseContext context, Expression expression, out List<TElement>? items)
         {
             items = null;
-            if (!TryCreatePage(expression, table, context.EntityTypes.DefaultLanguageID, out Func<IEnumerable<BlueprintEntity>, IEnumerable<BlueprintEntity>>? page))
+            if (!TryCreatePage(expression, table, context, out Func<IEnumerable<BlueprintEntity>, IEnumerable<BlueprintEntity>>? page, out IReadOnlyDictionary<Type, CachedReference>? references))
             {
                 return false;
             }
@@ -329,20 +329,22 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
                 results.Add((TElement)(object)table.Copy(stored, fLanguage));
             }
             items = results;
-            EntityIncludes.Load(context, results.OfType<BlueprintEntity>(), fLanguage);
+            EntityIncludes.Load(context, results.OfType<BlueprintEntity>(), fLanguage, references);
             return true;
         }
 
         /// <summary>Translates supported operations to Enumerable, preserving the exact order of filters, sorting, and limits.</summary>
         /// <param name="expression">The complete entity sequence, with or without paging.</param>
         /// <param name="table">The synchronized table snapshot and its stored properties.</param>
-        /// <param name="defaultLanguage">The language used by fallback-enabled properties.</param>
+        /// <param name="context">The model, languages and cached relationships available to the selection.</param>
         /// <param name="page">The safe selection of shared objects to copy.</param>
+        /// <param name="references">The target snapshots to use when populating sorted references on the results.</param>
         /// <returns>True if results can be selected safely before making independent copies.</returns>
         /// <exception cref="Exception">Expression rewriting or compilation fails.</exception>
-        private bool TryCreatePage(Expression expression, RAMCachedTable table, long defaultLanguage, out Func<IEnumerable<BlueprintEntity>, IEnumerable<BlueprintEntity>>? page)
+        private bool TryCreatePage(Expression expression, RAMCachedTable table, BlueprintDatabaseContext context, out Func<IEnumerable<BlueprintEntity>, IEnumerable<BlueprintEntity>>? page, out IReadOnlyDictionary<Type, CachedReference>? references)
         {
             page = null;
+            references = null;
             Stack<MethodCallExpression> operations = new Stack<MethodCallExpression>();
             while (expression is MethodCallExpression call && call.Method.DeclaringType == typeof(Queryable))
             {
@@ -362,7 +364,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
                 page = static currentRows => currentRows;
                 return true;
             }
-            CachedReadExpression visitor = new CachedReadExpression(fContract, table.ConcreteType, table.Properties, fLanguage, defaultLanguage);
+            CachedReadExpression visitor = new CachedReadExpression(fContract, table.ConcreteType, table.Properties, fLanguage, context.EntityTypes.DefaultLanguageID);
             ParameterExpression rows = Expression.Parameter(typeof(IEnumerable<BlueprintEntity>), "rows");
             Expression source = rows;
             foreach (MethodCallExpression operation in operations)
@@ -381,7 +383,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
                     case nameof(Queryable.OrderByDescending):
                     case nameof(Queryable.ThenBy):
                     case nameof(Queryable.ThenByDescending):
-                        if (!visitor.TryRewriteLambda(operation.Arguments[1], out LambdaExpression? key))
+                        if (!visitor.TryRewriteLambda(operation.Arguments[1], out LambdaExpression? key, sortContext: context))
                         {
                             return false;
                         }
@@ -413,6 +415,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
                 }
             }
             page = CachedPagePlans.Bind<IEnumerable<BlueprintEntity>, IEnumerable<BlueprintEntity>>(table, rows, source);
+            references = visitor.ReferenceSnapshots;
             return true;
         }
 
@@ -426,7 +429,7 @@ namespace Blueprint.Database.Queries.QueryExecutors.RAM
         private bool TryExecuteProjection<TElement>(RAMCachedTable table, BlueprintDatabaseContext context, Expression expression, out List<TElement>? items)
         {
             items = null;
-            Func<Expression, Func<IEnumerable<BlueprintEntity>, IEnumerable<BlueprintEntity>>?> createSelection = source => TryCreatePage(source, table, context.EntityTypes.DefaultLanguageID, out Func<IEnumerable<BlueprintEntity>, IEnumerable<BlueprintEntity>>? page) ? page : null;
+            Func<Expression, Func<IEnumerable<BlueprintEntity>, IEnumerable<BlueprintEntity>>?> createSelection = source => TryCreatePage(source, table, context, out Func<IEnumerable<BlueprintEntity>, IEnumerable<BlueprintEntity>>? page, out _) ? page : null;
             if (!CachedProjection.TryCreate<TElement>(expression, createSelection, fContract, table.ConcreteType, table.Properties, fLanguage, context.EntityTypes.DefaultLanguageID, out Func<IEnumerable<BlueprintEntity>, IEnumerable<TElement>>? projection))
             {
                 return false;

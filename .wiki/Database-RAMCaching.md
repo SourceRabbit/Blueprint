@@ -151,6 +151,8 @@ List<Product> products = Product.Where(item => item.Price >= 50m)
     .ToList();
 ```
 
+Ordering by a stored scalar on a direct `[AutoInclude]` reference to a RAM entity also supports selection before copying. For example, `OrderByDescending(product => product.VatCategory == null ? (decimal?)null : product.VatCategory.Rate).ThenBy(product => product.ID).Take(26)` reads each rate through the product's foreign key in the VAT category snapshot. Only the selected products are copied and receive their included relationships. Multilingual keys use the requested language and its configured fallback.
+
 `First`, `FirstOrDefault`, `Single`, and `SingleOrDefault` also select their result before copying, with or without a safe predicate. They return an independent entity with all its mapped data and translations. Empty `OrDefault` results remain null; `First`/`Single` still throw for missing results, and `Single`/`SingleOrDefault` still throw for multiple matches. The optimized path does not change the shared entity's language or return a shared mutable instance.
 
 The complete table is still cached. These optimizations reduce temporary entity copies, not retained cache size, and do not add lookup indexes: a predicate may still scan cached rows. Use a stable sort for paging. Unsupported query shapes, explicit-default overloads, and filters that cannot safely read shared values retain the existing protected-copy or SQL execution path. All optimizations are automatic and require no additional consumer API.

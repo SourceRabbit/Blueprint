@@ -4,6 +4,7 @@
 using Blueprint.Entities;
 using Blueprint.Entities.Annotations;
 using Blueprint.Database.Queries.QueryExecutors;
+using Blueprint.Database.Queries.QueryExecutors.RAM;
 using Microsoft.EntityFrameworkCore.Metadata;
 using System.Reflection;
 
@@ -14,25 +15,29 @@ namespace Blueprint.Database.Queries
     {
         private readonly BlueprintDatabaseContext fContext;
         private readonly long fLanguage;
+        private readonly IReadOnlyDictionary<Type, CachedReference>? fReferences;
         private readonly Dictionary<(Type, long), BlueprintEntity> fEntities = new Dictionary<(Type, long), BlueprintEntity>();
 
         /// <summary>Creates one identity scope for a materialized result graph.</summary>
         /// <param name="context">The context reserved for the current operation.</param>
         /// <param name="language">The language shared by the graph.</param>
-        private EntityIncludes(BlueprintDatabaseContext context, long language)
+        /// <param name="references">The snapshots already used for ordering the root rows.</param>
+        private EntityIncludes(BlueprintDatabaseContext context, long language, IReadOnlyDictionary<Type, CachedReference>? references)
         {
             fContext = context;
             fLanguage = language;
+            fReferences = references;
         }
 
         /// <summary>Loads declared relationships after root materialization, selecting DB or RAM for every related contract.</summary>
         /// <param name="context">The context reserved for the current operation.</param>
         /// <param name="entities">Independent root entities.</param>
         /// <param name="language">The language applied to related entities.</param>
+        /// <param name="references">The cached ordering targets used to populate this page consistently across a refresh.</param>
         /// <exception cref="Exception">Relationship mapping, synchronization, or SQL execution fails.</exception>
-        internal static void Load(BlueprintDatabaseContext context, IEnumerable<BlueprintEntity> entities, long language)
+        internal static void Load(BlueprintDatabaseContext context, IEnumerable<BlueprintEntity> entities, long language, IReadOnlyDictionary<Type, CachedReference>? references = null)
         {
-            EntityIncludes loader = new EntityIncludes(context, language);
+            EntityIncludes loader = new EntityIncludes(context, language, references);
             List<BlueprintEntity> roots = entities.ToList();
             foreach (BlueprintEntity entity in roots)
             {
@@ -69,7 +74,10 @@ namespace Blueprint.Database.Queries
                     List<BlueprintEntity> related = new List<BlueprintEntity>();
                     if (ids.Length > 0)
                     {
-                        foreach (BlueprintEntity row in executor.ReadRelated(fContext, targetKey, ids))
+                        IEnumerable<BlueprintEntity> rows = targetKey.IsPrimaryKey() && fReferences != null && fReferences.TryGetValue(targetContract, out CachedReference? snapshot)
+                            ? snapshot.CopyRows(ids, fLanguage)
+                            : executor.ReadRelated(fContext, targetKey, ids);
+                        foreach (BlueprintEntity row in rows)
                         {
                             (Type, long) identity = (row.GetType(), row.ID);
                             if (!fEntities.TryGetValue(identity, out BlueprintEntity? instance))
