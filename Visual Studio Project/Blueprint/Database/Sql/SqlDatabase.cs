@@ -181,8 +181,8 @@ namespace Blueprint.Database.Sql
                     base.InitializeContext(new DbContextOptionsBuilder().UseSqlServer(ConnectionString), context =>
                     {
                         SqlChangeTracking.InitializeDatabase(context);
-                        SqlSchemaInitializer.Initialize(context);
                         BlueprintDatabaseContext entityContext = (BlueprintDatabaseContext)context;
+                        SqlSchemaInitializer.Initialize(entityContext);
                         cache = entityContext.EntityTypes.Types.Keys.Any(contract => typeof(BlueprintEntityRAM).IsAssignableFrom(contract)) ? new SqlEntityCache(entityContext, RAMCacheRefreshInterval) : null;
                     });
                 }

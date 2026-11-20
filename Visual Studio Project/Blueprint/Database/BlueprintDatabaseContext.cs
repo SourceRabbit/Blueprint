@@ -14,6 +14,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Storage;
 using Blueprint.Entities;
 using Blueprint.Entities.Annotations;
+using Blueprint.Entities.Triggers;
 using Blueprint.Database.Queries;
 using Blueprint.Fundamentals;
 
@@ -168,6 +169,18 @@ namespace Blueprint.Database
                 }
             }
 
+            foreach (CountTrigger rule in fEntityTypes.CountTriggers)
+            {
+                EntityTypeBuilder source = modelBuilder.Entity(fEntityTypes.Types[rule.Source]);
+                source.ToTable(table => table.UseSqlOutputClause(false));
+                EntityTypeBuilder target = modelBuilder.Entity(fEntityTypes.Types[rule.Target]);
+                if (target.Metadata.FindProperty(rule.Counter)?.ClrType != typeof(int))
+                {
+                    throw new InvalidOperationException($"Trigger '{rule.Name}' requires a stored integer counter '{rule.Target.Name}.{rule.Counter}'.");
+                }
+                target.Property<int>(rule.Counter).HasDefaultValue(0).ValueGeneratedOnAddOrUpdate();
+            }
+
             foreach ((Type contract, Type concreteType) in fEntityTypes.Types)
             {
                 foreach (PropertyInfo property in global::Blueprint.Entities.BlueprintEntityTypes.GetProperties(contract).Where(property => typeof(BlueprintEntity).IsAssignableFrom(property.PropertyType) && !property.IsDefined(typeof(NotMappedAttribute))))
@@ -234,6 +247,10 @@ namespace Blueprint.Database
             if (defaultValue != null)
             {
                 propertyBuilder.HasDefaultValue(defaultValue.Value);
+            }
+            if (property.GetCustomAttribute<DatabaseGeneratedAttribute>()?.DatabaseGeneratedOption == DatabaseGeneratedOption.Computed)
+            {
+                propertyBuilder.ValueGeneratedOnAddOrUpdate();
             }
             if (property.GetCustomAttribute<ReadOnlyAttribute>()?.IsReadOnly == true)
             {

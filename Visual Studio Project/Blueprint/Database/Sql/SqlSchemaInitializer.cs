@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Nikolaos Siatras
 // SPDX-License-Identifier: MIT
 
+using Blueprint.Database.Sql.Triggers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -17,7 +18,7 @@ namespace Blueprint.Database.Sql
         /// <summary>Validates and applies schema changes atomically, serializing concurrent initialization.</summary>
         /// <param name="context">The context with the complete model.</param>
         /// <exception cref="InvalidOperationException">An existing table has an incompatible key or IDENTITY column.</exception>
-        internal static void Initialize(DbContext context)
+        internal static void Initialize(BlueprintDatabaseContext context)
         {
             using var transaction = context.Database.BeginTransaction();
             // The shared "Blueprint.Schema" application lock serializes schema synchronization for all entities in this database across application instances.
@@ -77,6 +78,7 @@ namespace Blueprint.Database.Sql
             {
                 context.Database.ExecuteSqlRaw(command.CommandText);
             }
+            SqlCountTriggers.Synchronize(context);
             SqlChangeTracking.InitializeTables(context);
             transaction.Commit();
         }

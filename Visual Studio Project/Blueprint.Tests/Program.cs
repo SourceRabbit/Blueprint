@@ -21,6 +21,13 @@ namespace Blueprint.Tests
                 return 0;
             }
 
+            if (args.Contains("--entity-triggers"))
+            {
+                Entities.Triggers.CountTriggerTest triggerTest = new Entities.Triggers.CountTriggerTest();
+                triggerTest.RunTest();
+                return 0;
+            }
+
             if (args.Contains("--entity-classes-sql"))
             {
                 Entities.EntityClassPersistenceTest persistenceTest = new Entities.EntityClassPersistenceTest();

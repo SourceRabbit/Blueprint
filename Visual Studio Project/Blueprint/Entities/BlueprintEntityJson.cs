@@ -114,7 +114,7 @@ namespace Blueprint.Entities
 
             PropertyInfo[] mapped = BlueprintEntityTypes.GetProperties(contract)
                 .Where(property => !property.IsDefined(typeof(NotMappedAttribute)) && BlueprintEntityTypes.GetRelatedContract(property.PropertyType) == null).ToArray();
-            Scalars = mapped.Where(property => !property.IsDefined(typeof(Multilingual))).ToDictionary(property => property.Name, StringComparer.Ordinal);
+            Scalars = mapped.Where(property => !property.IsDefined(typeof(Multilingual))).ToDictionary(property => property.Name, property => type.GetProperty(property.Name)!, StringComparer.Ordinal);
             PropertyInfo[] translated = mapped.Where(property => property.IsDefined(typeof(Multilingual))).ToArray();
             if (translated.Length > 0)
             {

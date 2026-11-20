@@ -8,6 +8,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 using Blueprint.Localization;
 using Blueprint.Entities;
 using Blueprint.Entities.Annotations;
+using Blueprint.Entities.Triggers;
 using Blueprint.Fundamentals;
 using System.Text.Json;
 
@@ -57,6 +58,7 @@ namespace Blueprint.Entities
                     }
                 }
             }
+            CountTriggers = CountTrigger.Discover(fTypes.Keys);
             fModelKey = languageKey + "|" + string.Join("|", fTypes.Keys.Select(type => type.AssemblyQualifiedName).OrderBy(name => name, StringComparer.Ordinal));
         }
 
@@ -84,6 +86,9 @@ namespace Blueprint.Entities
                 return fLanguages.Single(language => language.Prefix == string.Empty).ID;
             }
         }
+
+        /// <summary>The count triggers declared on the registered source entities.</summary>
+        internal IReadOnlyList<CountTrigger> CountTriggers { get; }
 
         /// <summary>The mappings from entity classes to generated subclasses.</summary>
         internal IReadOnlyDictionary<Type, Type> Types
@@ -131,11 +136,11 @@ namespace Blueprint.Entities
                 MethodInfo? setter = property.SetMethod;
                 bool generated = getter?.IsAbstract == true || setter?.IsAbstract == true || property.IsDefined(typeof(Multilingual));
                 bool invalidGetter = getter == null || !getter.IsPublic || getter.IsStatic;
-                bool invalidSetter = setter == null ? getter?.IsAbstract == true || !property.IsDefined(typeof(NotMappedAttribute)) : !setter.IsPublic || setter.IsStatic;
-                bool invalidOverride = generated && (getter?.IsVirtual != true || getter.IsFinal || setter?.IsVirtual != true || setter.IsFinal);
+                bool invalidSetter = setter == null ? !AllowsGetterOnly(property) : !setter.IsPublic || setter.IsStatic;
+                bool invalidOverride = generated && (getter?.IsVirtual != true || getter.IsFinal || (setter != null && (!setter.IsVirtual || setter.IsFinal)));
                 if (property.GetIndexParameters().Length != 0 || invalidGetter || invalidSetter || invalidOverride)
                 {
-                    throw new ArgumentException($"Entity property '{contract}.{property.Name}' must have public getters/setters or an implemented [NotMapped] getter. Multilingual and abstract properties require overridable getters and setters.", nameof(contract));
+                    throw new ArgumentException($"Entity property '{contract}.{property.Name}' requires valid public accessors. Getter-only properties must be implemented [NotMapped] properties or abstract database-computed scalars. Multilingual properties require an overridable getter and setter.", nameof(contract));
                 }
                 implementedAccessors.Add(getter!);
                 if (setter != null)
@@ -176,6 +181,24 @@ namespace Blueprint.Entities
                     throw new ArgumentException($"Multilingual property '{contract}.{property.Name}' must be a mapped string property.", nameof(contract));
                 }
             }
+        }
+
+        /// <summary>Identifies properties for which the entity contract can expose just a getter.</summary>
+        /// <param name="property">The property declared on the entity contract.</param>
+        /// <returns>Whether the getter supplies an unmapped value or reads a database-generated scalar.</returns>
+        private static bool AllowsGetterOnly(PropertyInfo property)
+        {
+            if (property.IsDefined(typeof(Multilingual)))
+            {
+                return false;
+            }
+            if (property.IsDefined(typeof(NotMappedAttribute)))
+            {
+                return property.GetMethod?.IsAbstract == false;
+            }
+            return property.GetMethod?.IsAbstract == true
+                && property.GetCustomAttribute<DatabaseGeneratedAttribute>()?.DatabaseGeneratedOption == DatabaseGeneratedOption.Computed
+                && GetRelatedContract(property.PropertyType) == null;
         }
 
         /// <summary>Rejects conflicts between dynamic translations and other CLR properties or physical columns.</summary>
@@ -287,7 +310,7 @@ namespace Blueprint.Entities
                 {
                     continue;
                 }
-                (FieldBuilder Field, MethodBuilder Getter, MethodBuilder Setter) generated = DefineProperty(builder, property.Name, property.PropertyType, !property.IsDefined(typeof(Multilingual)));
+                (FieldBuilder Field, MethodBuilder Getter, MethodBuilder Setter) generated = DefineProperty(builder, property.Name, property.PropertyType, emitStorage: !property.IsDefined(typeof(Multilingual)), privateSetter: property.SetMethod == null);
                 if (property.IsDefined(typeof(Multilingual)))
                 {
                     ILGenerator getIL = generated.Getter.GetILGenerator();
@@ -304,7 +327,10 @@ namespace Blueprint.Entities
                 }
 
                 builder.DefineMethodOverride(generated.Getter, property.GetMethod!);
-                builder.DefineMethodOverride(generated.Setter, property.SetMethod!);
+                if (property.SetMethod != null)
+                {
+                    builder.DefineMethodOverride(generated.Setter, property.SetMethod);
+                }
             }
 
             Type generatedType = builder.CreateType()!;
@@ -317,14 +343,16 @@ namespace Blueprint.Entities
         /// <param name="name">The property name.</param>
         /// <param name="type">The CLR value type.</param>
         /// <param name="emitStorage">Whether the accessors use the field directly.</param>
+        /// <param name="privateSetter">Whether only the framework can populate the generated property.</param>
         /// <returns>The members required to implement abstract properties and multilingual accessors.</returns>
-        private static (FieldBuilder Field, MethodBuilder Getter, MethodBuilder Setter) DefineProperty(TypeBuilder builder, string name, Type type, bool emitStorage = true)
+        private static (FieldBuilder Field, MethodBuilder Getter, MethodBuilder Setter) DefineProperty(TypeBuilder builder, string name, Type type, bool emitStorage = true, bool privateSetter = false)
         {
             FieldBuilder field = builder.DefineField("f" + name, type, FieldAttributes.Private);
             PropertyBuilder property = builder.DefineProperty(name, PropertyAttributes.None, type, null);
             MethodAttributes attributes = MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.HideBySig | MethodAttributes.SpecialName;
             MethodBuilder getter = builder.DefineMethod("get_" + name, attributes, type, Type.EmptyTypes);
-            MethodBuilder setter = builder.DefineMethod("set_" + name, attributes, null, new[] { type });
+            MethodAttributes setterAttributes = privateSetter ? MethodAttributes.Private | MethodAttributes.HideBySig | MethodAttributes.SpecialName : attributes;
+            MethodBuilder setter = builder.DefineMethod("set_" + name, setterAttributes, null, new[] { type });
             property.SetGetMethod(getter);
             property.SetSetMethod(setter);
             if (emitStorage)
