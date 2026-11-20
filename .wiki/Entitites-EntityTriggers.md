@@ -124,7 +124,7 @@ public abstract class Product : BlueprintEntityDB
     [ForeignKey(nameof(VatCategoryID))]
     public abstract ProductVatCategory VatCategory { get; set; }
 
-    [Precision(19, 2), DatabaseGenerated(DatabaseGeneratedOption.Computed)]
+    [Precision(18, 2), DatabaseGenerated(DatabaseGeneratedOption.Computed)]
     public abstract decimal? PriceWithVAT { get; }
 
     #endregion

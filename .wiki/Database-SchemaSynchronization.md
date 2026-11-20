@@ -64,7 +64,7 @@ SQL Server installs the trigger and initializes existing counts in the same sche
 
 ## Maintained decimal values
 
-Declare a stored price with `[Precision(19, 2), DatabaseGenerated(DatabaseGeneratedOption.Computed)]` and a public abstract getter. In the entity's `[EntityTriggers]` method, declare the formula using `triggers.MaintainValue("TR_Items_Gross", item => item.Gross, item => item.Net * item.Category.Factor);`. A category can declare its own rule with `triggers.MaintainValue("TR_Categories_Factor", category => category.Factor, category => 1m + category.Rate / 100m);`. Give a required generated column a database default for the initial insert.
+Declare a stored price with `[Precision(18, 2), DatabaseGenerated(DatabaseGeneratedOption.Computed)]` and a public abstract getter. In the entity's `[EntityTriggers]` method, declare the formula using `triggers.MaintainValue("TR_Items_Gross", item => item.Gross, item => item.Net * item.Category.Factor);`. A category can declare its own rule with `triggers.MaintainValue("TR_Categories_Factor", category => category.Factor, category => 1m + category.Rate / 100m);`. Give a required generated column a database default for the initial insert.
 
 The formula supports decimal literals, mapped decimal or nullable decimal properties on the entity or a direct reference, and addition, subtraction, multiplication and division. SQL Server propagates nulls and rounds the result to the scale of the destination column. Reference updates propagate through SQL Server's nested AFTER triggers in the same transaction. Each maintained property has one rule and the dependency graph must be acyclic. Schema synchronization installs the row and reference triggers and fills existing values.
 
