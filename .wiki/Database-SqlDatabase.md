@@ -45,22 +45,22 @@ The database still requires a language list even when the application uses only 
 
 ## Connection string used by EntitiesTutorial
 
-The tutorial connects to a local SQL Server Express instance using Windows authentication:
+The tutorial uses Windows authentication to connect to the default local SQL Server instance.
 
 ```csharp
-string sqlServerConnectionString = "Server=.\\SQLEXPRESS;Integrated Security=True;Encrypt=True;TrustServerCertificate=True;";
+string sqlServerConnectionString = "Server=.;Integrated Security=True;Encrypt=True;TrustServerCertificate=True;";
 ```
 
 The server must already be installed and running. Blueprint can create the application database, but it does not install SQL Server or start its service.
 
 | Setting | Meaning |
 | --- | --- |
-| `Server=.\SQLEXPRESS` | Selects the named `SQLEXPRESS` instance on the local computer. |
+| `Server=.` | Selects the default SQL Server instance on the local computer. |
 | `Integrated Security=True` | Connects using the application's Windows identity. |
 | `Encrypt=True` | Encrypts the connection to this SQL Server instance. |
 | `TrustServerCertificate=True` | Skips certificate validation for this local-development connection. |
 
-In a regular C# string literal, write `\\` for the single backslash in an instance name. The connection string received by the driver contains `.\SQLEXPRESS`. Connection-string values are separated by semicolons. See Microsoft's [connection-string reference](https://learn.microsoft.com/en-us/sql/connect/ado-net/connection-strings?view=sql-server-ver17).
+Connection-string values are separated by semicolons. See Microsoft's [connection-string reference](https://learn.microsoft.com/en-us/sql/connect/ado-net/connection-strings?view=sql-server-ver17).
 
 `TrustServerCertificate=True` does not disable encryption when used with `Encrypt=True`, but it skips verification of the server certificate. For deployment, use `TrustServerCertificate=False` with a certificate trusted by the client and a server name matching that certificate. See [encryption and certificate validation](https://learn.microsoft.com/en-us/sql/connect/ado-net/encryption-and-certificate-validation?view=sql-server-ver17).
 
@@ -156,7 +156,7 @@ namespace BlueprintManual
         public static void Main()
         {
             // Step 1 - Configure the database connection.
-            string sqlServerConnectionString = "Server=.\\SQLEXPRESS;Integrated Security=True;Encrypt=True;TrustServerCertificate=True;";
+            string sqlServerConnectionString = "Server=.;Integrated Security=True;Encrypt=True;TrustServerCertificate=True;";
 
             // Step 2 - Initialize the languages used by the application.
             // Multilingual columns have a suffix for each non-default language.

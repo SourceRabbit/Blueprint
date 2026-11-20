@@ -10,11 +10,7 @@ namespace Blueprint.Tests
     /// <summary>Defines the entry point and shared assertion helpers for a Blueprint test.</summary>
     public abstract class BlueprintTest
     {
-        // Home Database
-        protected readonly string fDatabaseConnectionString = "Server=.\\SQLEXPRESS;Integrated Security=True;Encrypt=True;TrustServerCertificate=True;";
-
-        // Work Database
-       // protected readonly string fDatabaseConnectionString = "Server=.;Integrated Security = True; Encrypt=True;TrustServerCertificate=True;";
+        protected readonly string fDatabaseConnectionString = "Server=.;Integrated Security=True;Encrypt=True;TrustServerCertificate=True;";
         private int fAssertionCount;
 
         /// <summary>Runs the checks and manages the resources of this test.</summary>

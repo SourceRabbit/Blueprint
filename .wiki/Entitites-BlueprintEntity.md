@@ -1,31 +1,20 @@
 # BlueprintEntity
 
-- [Entity Model and JSON](#entity-model-and-json) includes the entity contract, inherited properties, and JSON methods.
-- [Queries and CRUD](#queries-and-crud) includes the [method index](#method-index) and examples for reading and writing entities.
+`BlueprintEntity` is the abstract base class for every entity in `Blueprint.Entities`. It defines `ID` and `CurrentLanguage`. Its two direct subclasses, `BlueprintEntityDB` and `BlueprintEntityRAM`, are abstract and share the same API for queries, writes, transactions, translations, relationships, and concurrency.
 
-## Entity Model and JSON
+## Contents
 
-`BlueprintEntity` is the abstract base class shared by every entity. It belongs to `Blueprint.Entities` and defines `ID` and `CurrentLanguage`. Two abstract classes derive directly from it:
+- [Inherited properties](#inherited-properties)
+- [Choosing an entity base](#choosing-an-entity-base)
+- [Define an entity](#define-an-entity)
+- [Register and create an instance](#register-and-create-an-instance)
+- [JSON serialization](#json-serialization)
+- [Method index](#method-index)
+- [Queries and CRUD](#queries-and-crud)
+- [Migrating existing entities](#migrating-existing-entities)
+- [Related topics](#related-topics)
 
-| Base class | Behavior |
-| --- | --- |
-| `BlueprintEntityDB` | Uses `QueryExecutor_Database` to read SQL, including when loaded as an `AutoInclude` of a RAM entity. |
-| `BlueprintEntityRAM` | Uses `QueryExecutor_RAM` for eligible reads, including when loaded as an `AutoInclude` of a DB entity. Persists in SQL and synchronizes RAM through Change Tracking. |
-
-Define a public, non-sealed class deriving from one of these two classes and mark it with `[Entity]`. The class can be abstract. Blueprint generates a concrete subclass when the contract is registered; continue to obtain instances through `Product.Create()` or the corresponding Entity API. Direct `new Product()` does not create the generated multilingual implementation and is not supported for persistence.
-
-Both base classes use the same CRUD, transaction, translation, relationship, and concurrency APIs. Cache selection follows class inheritance, including intermediate base classes. The `[RAMCached]` annotation has been removed. See [RAM Caching](Database-RAMCaching.md) for synchronization and `AutoInclude` dependencies.
-
-Every automatically included entity selects its own executor. A DB parent can contain a RAM child and a RAM parent can contain a DB child. `AutoInclude` requests loading; it does not change the target's data source or enable caching for DB classes. See [Query Executors](Database-QueryExecutors.md) for the hierarchy, shared LINQ API, and mixed-source relationships. Transaction reads use SQL for the entire graph.
-
-Entity definitions, generated entity types, and the shared Entity API are organized under `Blueprint.Entities`, with public annotations in `Blueprint.Entities.Annotations`. SQL persistence stays under `Blueprint.Database.Sql`; its internal `BlueprintEntityCommands` handles inserts, updates, and deletes. This namespace separation preserves the existing SQL storage, RAM synchronization, and query behavior.
-
-| JSON method | Purpose |
-| --- | --- |
-| [`product.ToJson()`](#serialize-an-entity-to-json) | Serialize scalar values and all stored translations. |
-| [`Product.FromJson(json)`](#create-an-entity-from-json) | Create an unsaved product from its JSON representation. |
-
-### Inherited properties
+## Inherited properties
 
 | Property | Type | Purpose |
 | --- | --- | --- |
@@ -33,6 +22,71 @@ Entity definitions, generated entity types, and the shared Entity API are organi
 | `CurrentLanguage` | `long` | The configured language ID used when reading or assigning multilingual properties. It is not stored as a database column. |
 
 New instances use the language whose configured prefix is empty. The default language is determined by that prefix, not by a particular ID. See [Multilingual Entities](Entitites-MultilingualEntities.md) for language configuration and translated properties.
+
+## Choosing an entity base
+
+| Entity base | Read source outside transactions | When to choose it |
+| --- | --- | --- |
+| <a name="blueprintentitydb"></a>[BlueprintEntityDB](Entitites-BlueprintEntityDB.md) | SQL Server | The application needs current database values or usually reads a small part of a large table. |
+| <a name="blueprintentityram"></a>[BlueprintEntityRAM](Entitites-BlueprintEntityRAM.md) | An in-memory snapshot for supported queries, SQL Server for the rest | The table is read frequently, all rows and translations fit in memory, and readers can tolerate the delay between cache refreshes. |
+
+Both bases write to SQL Server. Inside a Blueprint transaction, all reads use SQL Server, including related entities loaded through `AutoInclude`.
+
+## Define an entity
+
+Define a public, non-sealed class deriving from `BlueprintEntityDB` or `BlueprintEntityRAM` and mark it with `[Entity]`. The class can be abstract. Blueprint generates a concrete subclass when the contract is registered; continue to obtain instances through `Product.Create()` or the corresponding Entity API. Direct `new Product()` does not create the generated multilingual implementation and is not supported for persistence.
+
+Entity definitions, generated entity types, and the shared Entity API are organized under `Blueprint.Entities`, with public annotations in `Blueprint.Entities.Annotations`. SQL persistence stays under `Blueprint.Database.Sql`; its internal `BlueprintEntityCommands` handles inserts, updates, and deletes. This namespace separation preserves the existing SQL storage, RAM synchronization, and query behavior.
+
+```csharp
+using Blueprint.Entities;
+using Blueprint.Entities.Annotations;
+
+namespace BlueprintManual
+{
+    /// <summary>Describes a catalog item with a code and title.</summary>
+    [Entity("CatalogItems")]
+    public abstract class CatalogItem : BlueprintEntityDB
+    {
+        public abstract string Code { get; set; }
+
+        public abstract string Title { get; set; }
+    }
+}
+```
+
+`[Entity("CatalogItems")]` maps this contract to `dbo.CatalogItems`. The inherited `ID` becomes its primary key. `Code` and `Title` are ordinary stored properties; multilingual storage requires a `[Multilingual]` annotation.
+
+Entity classes must be public, non-sealed, have no unbound generic parameters, and expose a public or protected parameterless constructor. Each registered class must declare its own `[Entity]`; an unregistered intermediate base class does not need it. Deriving directly from `BlueprintEntity` is not sufficient: choose `BlueprintEntityDB` or `BlueprintEntityRAM`.
+
+Mapped properties require public getters and setters. Abstract properties are implemented by the generated subclass; ordinary implemented properties retain their accessors and initializers. `[Multilingual]` properties must have overridable accessors (`abstract` or non-sealed `virtual`/`override`), because Blueprint overrides them to select the current translation. Keep mapping attributes on the effective property declaration. Inherited properties and their annotations are supported; hiding an inherited property with `new` is rejected.
+
+Keep mapped accessors free of side effects: they are used during persistence, materialization, and cached reads or copies. Multilingual accessor implementations are replaced by generated translation routing; assign initial translations through the generated instance or from the constructor, rather than through a multilingual auto-property initializer.
+
+Class constructors run when generated instances are created, including during reads and cache copying. Keep constructors lightweight and free of external effects. The configured default language is set before the constructor runs, allowing a constructor to assign a virtual multilingual property. Implemented custom methods and computed `[NotMapped]` getters are supported; unimplemented abstract methods or events are rejected. See [Data Annotations](Entitites-DataAnnotations.md).
+
+Entity class inheritance does not introduce SQL inheritance tables or discriminator columns. Each registered contract retains its own table, columns, sequence, and relationships.
+
+## Register and create an instance
+
+Initialize the database as described in [SQL Server](Database-SqlDatabase.md). Inside its lifetime, register the contract before using its Entity API. The following statements assume an active `database` and run where `CatalogItem` is in scope, with `Blueprint.Entities` imported:
+
+```csharp
+database.RegisterEntities(typeof(CatalogItem));
+
+CatalogItem item = CatalogItem.Create();
+item.Code = "CAMERA-001";
+item.Title = "Camera";
+CatalogItem.Insert(item);
+```
+
+Registration synchronizes the entity's schema and prepares any configured cache. `Create()` produces an unsaved instance; `Insert()` writes it to the database and fills its `ID`. Leave the ID at zero before insertion.
+
+Calls such as `CatalogItem.Create()`, `CatalogItem.Where(...)`, and `CatalogItem.Insert(...)` are supplied by `BlueprintEntityQueries` through the `Blueprint.Entities` namespace. They use the active database and require the entity contract to be registered.
+
+Changing a loaded object's properties does not save it automatically. Use `Update(...)` or a transaction to persist changes. See [Queries and CRUD](#queries-and-crud) and [Transactions](Database-Transactions.md) for reads and writes.
+
+## JSON serialization
 
 ### Serialize an entity to JSON
 
@@ -89,105 +143,18 @@ Console.WriteLine(greek.GetProperty("Description").GetRawText());
 
 The getter uses the English fallback for both values. Reading it leaves the stored Greek translation untouched, so `ToJson()` preserves the exact value supplied to `FromJson()`. See [Default-language fallback](Entitites-MultilingualEntities.md#default-language-fallback).
 
-### BlueprintEntityDB
+## Method index
 
-Derive from `BlueprintEntityDB` for SQL reads through `QueryExecutor_Database`. Inserts, updates, and deletes also execute in SQL. These entities are not added to the RAM cache when another entity includes them; each `AutoInclude` target uses its own executor.
+**Entity API** means a static call on the registered contract, such as `Product.Where(...)`. **LINQ** means a call on the resulting `IQueryable<Product>`, such as `query.Count()`. Select a method to jump to its usage example.
 
-The shared Entity API supports creation, LINQ queries, and writes. See [Queries and CRUD](#queries-and-crud) and [Query Executors](Database-QueryExecutors.md).
+### JSON methods
 
-### BlueprintEntityRAM
-
-Derive from `BlueprintEntityRAM` for eligible reads through `QueryExecutor_RAM`. SQL remains the persistent store, and SQL Server Change Tracking synchronizes committed changes into the RAM cache. Included entities continue to use their own DB or RAM source.
-
-Unsupported queries and transaction reads use SQL. The consumer uses the same Entity API as DB entities. See [RAM Caching](Database-RAMCaching.md) for refresh intervals, SQL requirements, and consistency.
-
-### Define an entity
-
-```csharp
-using Blueprint.Entities;
-using Blueprint.Entities.Annotations;
-
-namespace BlueprintManual
-{
-    /// <summary>Describes a catalog item with a code and title.</summary>
-    [Entity("CatalogItems")]
-    public abstract class CatalogItem : BlueprintEntityDB
-    {
-        public abstract string Code { get; set; }
-
-        public abstract string Title { get; set; }
-    }
-}
-```
-
-`[Entity("CatalogItems")]` maps this contract to `dbo.CatalogItems`. The inherited `ID` becomes its primary key. `Code` and `Title` are ordinary stored properties; multilingual storage requires a `[Multilingual]` annotation.
-
-Entity classes must be public, non-sealed, have no unbound generic parameters, and expose a public or protected parameterless constructor. Each registered class must declare its own `[Entity]`; an unregistered intermediate base class does not need it. Deriving directly from `BlueprintEntity` is not sufficient: choose `BlueprintEntityDB` or `BlueprintEntityRAM`.
-
-Mapped properties require public getters and setters. Abstract properties are implemented by the generated subclass; ordinary implemented properties retain their accessors and initializers. `[Multilingual]` properties must have overridable accessors (`abstract` or non-sealed `virtual`/`override`), because Blueprint overrides them to select the current translation. Keep mapping attributes on the effective property declaration. Inherited properties and their annotations are supported; hiding an inherited property with `new` is rejected.
-
-Keep mapped accessors free of side effects: they are used during persistence, materialization, and cached reads or copies. Multilingual accessor implementations are replaced by generated translation routing; assign initial translations through the generated instance or from the constructor, rather than through a multilingual auto-property initializer.
-
-Class constructors run when generated instances are created, including during reads and cache copying. Keep constructors lightweight and free of external effects. The configured default language is set before the constructor runs, allowing a constructor to assign a virtual multilingual property. Implemented custom methods and computed `[NotMapped]` getters are supported; unimplemented abstract methods or events are rejected. See [Data Annotations](Entitites-DataAnnotations.md).
-
-Entity class inheritance does not introduce SQL inheritance tables or discriminator columns. Each registered contract retains its own table, columns, sequence, and relationships.
-
-### Register and create an instance
-
-Initialize the database as described in [SQL Server](Database-SqlDatabase.md). Inside its lifetime, register the contract before using its Entity API. The following statements assume an active `database` and run where `CatalogItem` is in scope, with `Blueprint.Entities` imported:
-
-```csharp
-database.RegisterEntities(typeof(CatalogItem));
-
-CatalogItem item = CatalogItem.Create();
-item.Code = "CAMERA-001";
-item.Title = "Camera";
-CatalogItem.Insert(item);
-```
-
-Registration synchronizes the entity's schema and prepares any configured cache. `Create()` produces an unsaved instance; `Insert()` writes it to the database and fills its `ID`. Leave the ID at zero before insertion.
-
-Calls such as `CatalogItem.Create()`, `CatalogItem.Where(...)`, and `CatalogItem.Insert(...)` are supplied by `BlueprintEntityQueries` through the `Blueprint.Entities` namespace. They use the active database and require the entity contract to be registered.
-
-Changing a loaded object's properties does not save it automatically. Use `Update(...)` or a transaction to persist changes. See [Queries and CRUD](#queries-and-crud) and [Transactions](Database-Transactions.md) for reads and writes.
-
-### Migrating existing entities
-
-#### Updating namespace imports
-
-Update consumer imports and fully qualified references, then rebuild the library and all consumers:
-
-| Previous namespace | Current namespace |
+| JSON method | Purpose |
 | --- | --- |
-| `Blueprint.Database.Entities` | `Blueprint.Entities` |
-| `Blueprint.Database.Entities.Annotations` | `Blueprint.Entities.Annotations` |
+| [`product.ToJson()`](#serialize-an-entity-to-json) | Serialize scalar values and all stored translations. |
+| [`Product.FromJson(json)`](#create-an-entity-from-json) | Create an unsaved product from its JSON representation. |
 
-The previous namespaces are no longer provided. Entity class names, static API calls, database tables, columns, and stored data stay unchanged. SQL configuration still uses `Blueprint.Database` and `Blueprint.Database.Sql`.
-
-#### Migrating interface contracts
-
-1. Replace `public interface Product : BlueprintEntity` with `public abstract class Product : BlueprintEntityDB`, or use `BlueprintEntityRAM` for a previously cached entity.
-2. Remove `[RAMCached]` and add `public abstract` to the former interface properties. Alternatively use implemented class properties, keeping multilingual accessors virtual.
-3. Preserve `[Entity]`, table and column names, annotations, and relationship types. Computed getters need an explicit `public` modifier.
-4. Rebuild the library and all consumers. Interface-only inheritance must be adapted to C# single class inheritance; optional interfaces can still describe shared consumer behavior, while mapping annotations belong on class properties.
-
-The Entity API calls stay the same. With unchanged names and mappings, this migration does not require renaming tables or columns or rewriting stored data. A RAM entity continues to write to SQL, and all transaction reads continue to bypass RAM.
-
-## Queries and CRUD
-
-Use the static Entity API on registered contracts for reads and writes. Import `Blueprint.Entities` and `System.Linq`; initialize the database and register the contracts as shown in the [complete checkout example](Database-EShopCheckoutTutorial.md#complete-example-in-main).
-
-The Entity API keeps the same signatures for reads and writes. The former `Collection<TEntity>` type and `database.Collection<TEntity>()` helpers have been removed. Use the Entity API for these operations, and import `Blueprint.Database.Queries` for `TextSearch` extensions.
-
-Examples use the [Product contract](Database-EShopCheckoutTutorial.md#define-a-contract). `productID` represents an existing product ID supplied by your application. Run each write example independently and use unique SKUs when inserting again.
-
-Both DB and RAM entity classes use this same LINQ syntax. Blueprint selects `QueryExecutor_Database` for `BlueprintEntityDB` and `QueryExecutor_RAM` for `BlueprintEntityRAM`. Every `AutoInclude` target selects its own executor independently of its parent, so results can contain both SQL and RAM entities. See [Query Executors](Database-QueryExecutors.md) for a release-year/price example and mixed-source behavior.
-
-### Method index
-
-**Entity API** means a static call on the registered contract, such as `Product.Where(...)`. **LINQ** means a call on the resulting `IQueryable<Product>`, such as `query.Count()`. The tables link each call to its example in this section.
-
-#### Build a query
+### Build a query
 
 These methods compose a query without executing it.
 
@@ -202,7 +169,7 @@ These methods compose a query without executing it.
 | [`query.Skip(count)`](#skip-and-take) | LINQ | Skip rows before reading a page. |
 | [`query.Take(count)`](#skip-and-take) | LINQ | Limit the number of returned rows. |
 
-#### Read results
+### Read results
 
 These methods execute the composed query through the entity's executor, subject to the [query routing and SQL fallback rules](#query-limits-and-cached-entities).
 
@@ -215,7 +182,7 @@ These methods execute the composed query through the entity's executor, subject 
 | [`query.LongCount()`](#count-and-longcount) | LINQ | The number of matches as a `long`. |
 | [`query.ToList()`](#tolist) | LINQ | A materialized `List<T>` of entities or projected values. |
 
-#### Create and write entities
+### Create and write entities
 
 `Create` only creates an object. `Insert`, `Update`, and `Delete` execute writes in SQL for both DB and RAM entities; RAM entities retain their [cache synchronization](Database-RAMCaching.md#refresh-interval-and-consistency) behavior.
 
@@ -226,7 +193,7 @@ These methods execute the composed query through the entity's executor, subject 
 | [`Product.Update(product)`](#update) | Entity API | Save mapped values for one entity or a collection; return the affected row count. |
 | [`Product.Delete(predicate)`](#delete) | Entity API | Delete rows matching a predicate; return the affected row count. |
 
-#### Search text
+### Search text
 
 These `TextSearch` string extensions can be used inside a query predicate or ordering expression. They do not execute the enclosing query by themselves.
 
@@ -236,6 +203,16 @@ These `TextSearch` string extensions can be used inside a query predicate or ord
 | [`text.StartsWith(value, options)`](#startswith-with-case-and-accent-options) | String extension with `CompareOptions` | Match text at the beginning of a string. |
 
 See also [language selection](#query-a-language), [transactions](#group-multiple-writes), and [query limits](#query-limits-and-cached-entities).
+
+## Queries and CRUD
+
+Use the static Entity API on registered contracts for reads and writes. Import `Blueprint.Entities` and `System.Linq`; initialize the database and register the contracts as shown in the [complete checkout example](Database-EShopCheckoutTutorial.md#complete-example-in-main).
+
+The Entity API keeps the same signatures for reads and writes. The former `Collection<TEntity>` type and `database.Collection<TEntity>()` helpers have been removed. Use the Entity API for these operations, and import `Blueprint.Database.Queries` for `TextSearch` extensions.
+
+Examples use the [Product contract](Database-EShopCheckoutTutorial.md#define-a-contract). `productID` represents an existing product ID supplied by your application. Run each write example independently and use unique SKUs when inserting again.
+
+Both DB and RAM entity classes use this same LINQ syntax. Blueprint selects `QueryExecutor_Database` for `BlueprintEntityDB` and `QueryExecutor_RAM` for `BlueprintEntityRAM`. Every `AutoInclude` target selects its own executor independently of its parent, so results can contain both SQL and RAM entities. See [Query Executors](Database-QueryExecutors.md) for a release-year/price example and mixed-source behavior.
 
 ### Filter, order, and page
 
@@ -572,6 +549,28 @@ SQL queries must be translatable by the provider. Arbitrary C# methods and `NotM
 
 For `BlueprintEntityRAM` contracts, eligible queries execute against in-memory snapshots; others use SQL. In-memory string comparisons can differ from the database collation. Returned entities remain independent objects. See [RAM Caching](Database-RAMCaching.md) for query routing and paging behavior.
 
-### Related topics
+## Migrating existing entities
+
+### Updating namespace imports
+
+Update consumer imports and fully qualified references, then rebuild the library and all consumers:
+
+| Previous namespace | Current namespace |
+| --- | --- |
+| `Blueprint.Database.Entities` | `Blueprint.Entities` |
+| `Blueprint.Database.Entities.Annotations` | `Blueprint.Entities.Annotations` |
+
+The previous namespaces are no longer provided. Entity class names, static API calls, database tables, columns, and stored data stay unchanged. SQL configuration still uses `Blueprint.Database` and `Blueprint.Database.Sql`.
+
+### Migrating interface contracts
+
+1. Replace `public interface Product : BlueprintEntity` with `public abstract class Product : BlueprintEntityDB`, or use `BlueprintEntityRAM` for a previously cached entity.
+2. Remove `[RAMCached]` and add `public abstract` to the former interface properties. Alternatively use implemented class properties, keeping multilingual accessors virtual.
+3. Preserve `[Entity]`, table and column names, annotations, and relationship types. Computed getters need an explicit `public` modifier.
+4. Rebuild the library and all consumers. Interface-only inheritance must be adapted to C# single class inheritance; optional interfaces can still describe shared consumer behavior, while mapping annotations belong on class properties.
+
+The Entity API calls stay the same. With unchanged names and mappings, this migration does not require renaming tables or columns or rewriting stored data. A RAM entity continues to write to SQL, and all transaction reads continue to bypass RAM.
+
+## Related topics
 
 [SQL Server](Database-SqlDatabase.md) · [Data Annotations](Entitites-DataAnnotations.md) · [Relationships](Entitites-Relationships.md) · [Multilingual Entities](Entitites-MultilingualEntities.md) · [EShop - Checkout Tutorial](Database-EShopCheckoutTutorial.md) · [User manual](README.md) · [Transactions](Database-Transactions.md) · [RAM Caching](Database-RAMCaching.md)

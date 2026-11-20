@@ -23,7 +23,7 @@ namespace BlueprintManual
         /// <exception cref="Exception">Log initialization or persistence fails.</exception>
         private static void Main()
         {
-            string connectionString = "Server=(localdb)\\MSSQLLocalDB;Integrated Security=True;Encrypt=True;TrustServerCertificate=True;";
+            string connectionString = "Server=.;Integrated Security=True;Encrypt=True;TrustServerCertificate=True;";
             BlueprintLog log = new SqlLog(connectionString, "BlueprintLogs", "Log");
 
             log.WriteToLog(EBlueprintLogLevel.Info, "Application started.");
