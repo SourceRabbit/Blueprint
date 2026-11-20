@@ -58,7 +58,7 @@ namespace Blueprint.Entities
                     }
                 }
             }
-            CountTriggers = CountTrigger.Discover(fTypes.Keys);
+            Triggers = EntityTriggerDeclarations.Discover(fTypes.Keys);
             fModelKey = languageKey + "|" + string.Join("|", fTypes.Keys.Select(type => type.AssemblyQualifiedName).OrderBy(name => name, StringComparer.Ordinal));
         }
 
@@ -87,8 +87,8 @@ namespace Blueprint.Entities
             }
         }
 
-        /// <summary>The count triggers declared on the registered source entities.</summary>
-        internal IReadOnlyList<CountTrigger> CountTriggers { get; }
+        /// <summary>The triggers declared on the registered entity contracts.</summary>
+        internal EntityTriggerDeclarations Triggers { get; }
 
         /// <summary>The mappings from entity classes to generated subclasses.</summary>
         internal IReadOnlyDictionary<Type, Type> Types

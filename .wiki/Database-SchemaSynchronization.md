@@ -46,6 +46,8 @@ Registration requires appropriate SQL permissions, including creation or alterat
 
 ## Entity count triggers
 
+For C# declarations and worked examples of both `MaintainCount` and `MaintainValue`, see [Entity Triggers](Entitites-EntityTriggers.md).
+
 A public static method marked `[EntityTriggers]` receives an `EntityTriggerBuilder<TSource>`. For example, this method on an inventory item counts rows with a non-null owner and includes only items that are listed.
 
 ```csharp
@@ -59,6 +61,12 @@ public static void ConfigureTriggers(EntityTriggerBuilder<Item> triggers)
 Import `Blueprint.Entities.Annotations` and `Blueprint.Entities.Triggers`. Use a mapped foreign key to the target ID and a stored `int` counter. Declare the counter with `[DefaultValue(0), DatabaseGenerated(DatabaseGeneratedOption.Computed)]` when the target may also be registered on its own. With these attributes, the target can expose the counter as `public abstract int ItemCount { get; }`. The source rule otherwise configures the zero default and database-generated value automatically. Each counter has one owner rule. The optional predicate supports direct non-nullable Boolean, enum and integer properties, numeric or enum literals, comparisons, and Boolean AND, OR and NOT. Unsupported expressions fail registration.
 
 SQL Server installs the trigger and initializes existing counts in the same schema transaction. Regular inserts, updates and deletes from any client adjust counters for the affected keys, including multi-row statements and transactions that roll back. Moving a row between owners adjusts both counters. An unchanged trigger is retained. Synchronization replaces changed or disabled Blueprint count triggers and removes obsolete Blueprint count triggers on registered source tables. Unmanaged triggers are preserved. Bulk-copy tools must fire triggers to participate; operations that bypass triggers, such as truncating the source table, require a recount.
+
+## Maintained decimal values
+
+Declare a stored price with `[Precision(19, 2), DatabaseGenerated(DatabaseGeneratedOption.Computed)]` and a public abstract getter. In the entity's `[EntityTriggers]` method, declare the formula using `triggers.MaintainValue("TR_Items_Gross", item => item.Gross, item => item.Net * item.Category.Factor);`. A category can declare its own rule with `triggers.MaintainValue("TR_Categories_Factor", category => category.Factor, category => 1m + category.Rate / 100m);`. Give a required generated column a database default for the initial insert.
+
+The formula supports decimal literals, mapped decimal or nullable decimal properties on the entity or a direct reference, and addition, subtraction, multiplication and division. SQL Server propagates nulls and rounds the result to the scale of the destination column. Reference updates propagate through SQL Server's nested AFTER triggers in the same transaction. Each maintained property has one rule and the dependency graph must be acyclic. Schema synchronization installs the row and reference triggers and fills existing values.
 
 ## Generated IDs
 

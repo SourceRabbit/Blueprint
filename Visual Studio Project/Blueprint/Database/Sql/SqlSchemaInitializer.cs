@@ -78,7 +78,7 @@ namespace Blueprint.Database.Sql
             {
                 context.Database.ExecuteSqlRaw(command.CommandText);
             }
-            SqlCountTriggers.Synchronize(context);
+            SqlEntityTriggers.Synchronize(context);
             SqlChangeTracking.InitializeTables(context);
             transaction.Commit();
         }

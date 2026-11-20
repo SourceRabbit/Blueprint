@@ -169,7 +169,22 @@ namespace Blueprint.Database
                 }
             }
 
-            foreach (CountTrigger rule in fEntityTypes.CountTriggers)
+            foreach (ValueTrigger rule in fEntityTypes.Triggers.Values)
+            {
+                EntityTypeBuilder target = modelBuilder.Entity(fEntityTypes.Types[rule.Entity]);
+                if (target.Metadata.FindProperty(rule.Target) == null)
+                {
+                    throw new InvalidOperationException($"MaintainValue '{rule.Name}' requires a mapped scalar target.");
+                }
+                target.Property(rule.Target).ValueGeneratedOnAddOrUpdate();
+                target.ToTable(table => table.UseSqlOutputClause(false));
+                foreach (Type related in rule.Inputs.Where(input => input.Navigation != null).Select(input => input.Navigation!.PropertyType).Distinct())
+                {
+                    modelBuilder.Entity(fEntityTypes.Types[related]).ToTable(table => table.UseSqlOutputClause(false));
+                }
+            }
+
+            foreach (CountTrigger rule in fEntityTypes.Triggers.Counts)
             {
                 EntityTypeBuilder source = modelBuilder.Entity(fEntityTypes.Types[rule.Source]);
                 source.ToTable(table => table.UseSqlOutputClause(false));

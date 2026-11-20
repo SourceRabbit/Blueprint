@@ -16,6 +16,7 @@ This manual describes the consumer API available in this repository. Examples ta
 - [Data Annotations](Entitites-DataAnnotations.md): configure fields, indexes, generated values, and concurrency tokens.
   - [Relationships](Entitites-Relationships.md): define foreign keys, reference properties, inverse collections, and automatic loading.
   - [Multilingual Entities](Entitites-MultilingualEntities.md): configure languages and read or update translations.
+- [Entity Triggers](Entitites-EntityTriggers.md) shows how to maintain counts and calculated values from C# entity declarations.
 
 ## Blueprint Database
 

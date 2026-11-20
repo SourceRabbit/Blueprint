@@ -10,24 +10,33 @@ using System.Data.Common;
 
 namespace Blueprint.Database.Sql.Triggers
 {
-    /// <summary>Installs Blueprint-owned count triggers and initializes existing counters in the schema transaction.</summary>
-    internal static class SqlCountTriggers
+    /// <summary>Installs Blueprint-owned entity triggers and initializes stored values in the schema transaction.</summary>
+    internal static class SqlEntityTriggers
     {
-        private const string OWNER_PROPERTY = "Blueprint.MaintainCount";
-        private sealed record Definition(string Schema, string Table, string Name, string Create, string Backfill);
-        private sealed record Installed(string Source, string? Create);
+        private const string COUNT_OWNER = "Blueprint.MaintainCount";
+        internal const string VALUE_OWNER = "Blueprint.MaintainValue";
+        internal sealed record Definition(string Schema, string Table, string Name, string Create, string Backfill, string Owner, string? DeclaringTable);
+        private sealed record Installed(string DeclaringTable, string? Create);
 
         /// <summary>Reconciles trigger definitions only for source tables present in this model.</summary>
         /// <param name="context">The active schema synchronization transaction.</param>
         internal static void Synchronize(BlueprintDatabaseContext context)
         {
+            if (context.EntityTypes.Triggers.RequiresNestedTriggers)
+            {
+                SqlSchemaInitializer.ExecuteCommand(context, """
+                    IF EXISTS (SELECT 1 FROM sys.configurations WHERE name = 'nested triggers' AND CONVERT(int, value_in_use) = 0)
+                        THROW 51000, 'Chained MaintainValue formulas require the SQL Server nested triggers option.', 1;
+                    """);
+            }
             ISqlGenerationHelper sql = context.GetService<ISqlGenerationHelper>();
             HashSet<string> sources = context.Model.GetEntityTypes().Select(entity => sql.DelimitIdentifier(entity.GetTableName()!, entity.GetSchema())).ToHashSet(StringComparer.OrdinalIgnoreCase);
             Dictionary<string, Definition> desired = new Dictionary<string, Definition>(StringComparer.OrdinalIgnoreCase);
-            foreach (CountTrigger rule in context.EntityTypes.CountTriggers)
+            IEnumerable<Definition> definitions = context.EntityTypes.Triggers.Counts.Select(rule => Build(context, sql, rule))
+                .Concat(context.EntityTypes.Triggers.Values.SelectMany(rule => SqlValueTriggers.Build(context, sql, rule)));
+            foreach (Definition definition in definitions)
             {
-                Definition definition = Build(context, sql, rule);
-                string name = sql.DelimitIdentifier(rule.Name, definition.Schema);
+                string name = sql.DelimitIdentifier(definition.Name, definition.Schema);
                 if (!desired.TryAdd(name, definition))
                 {
                     throw new InvalidOperationException($"Duplicate trigger name {name}.");
@@ -36,11 +45,12 @@ namespace Blueprint.Database.Sql.Triggers
             Dictionary<string, Installed> installed = ReadInstalled(context, sql);
             foreach ((string name, Installed existing) in installed)
             {
-                if (sources.Contains(existing.Source) && (!desired.TryGetValue(name, out Definition? definition) || existing.Create != definition.Create))
+                if (sources.Contains(existing.DeclaringTable) && (!desired.TryGetValue(name, out Definition? definition) || existing.Create != definition.Create))
                 {
                     SqlSchemaInitializer.ExecuteCommand(context, $"DROP TRIGGER {name}");
                 }
             }
+            List<string> backfills = new List<string>();
             foreach ((string name, Definition definition) in desired)
             {
                 if (installed.TryGetValue(name, out Installed? existing) && existing.Create == definition.Create)
@@ -49,8 +59,13 @@ namespace Blueprint.Database.Sql.Triggers
                 }
                 // CREATE holds a schema modification lock on the source until backfill and commit finish.
                 SqlSchemaInitializer.ExecuteCommand(context, definition.Create);
-                context.Database.ExecuteSqlInterpolated($"EXEC sys.sp_addextendedproperty @name={OWNER_PROPERTY}, @value=1, @level0type=N'SCHEMA', @level0name={definition.Schema}, @level1type=N'TABLE', @level1name={definition.Table}, @level2type=N'TRIGGER', @level2name={definition.Name}");
-                SqlSchemaInitializer.ExecuteCommand(context, definition.Backfill);
+                object owner = (object?)definition.DeclaringTable ?? 1;
+                context.Database.ExecuteSqlInterpolated($"EXEC sys.sp_addextendedproperty @name={definition.Owner}, @value={owner}, @level0type=N'SCHEMA', @level0name={definition.Schema}, @level1type=N'TABLE', @level1name={definition.Table}, @level2type=N'TRIGGER', @level2name={definition.Name}");
+                backfills.Add(definition.Backfill);
+            }
+            foreach (string backfill in backfills.Distinct(StringComparer.Ordinal))
+            {
+                SqlSchemaInitializer.ExecuteCommand(context, backfill);
             }
         }
 
@@ -62,20 +77,24 @@ namespace Blueprint.Database.Sql.Triggers
         {
             Dictionary<string, Installed> installed = new Dictionary<string, Installed>(StringComparer.OrdinalIgnoreCase);
             const string query = """
-                SELECT s.name, t.name, tr.name, m.definition, tr.is_disabled
+                SELECT s.name, t.name, tr.name, m.definition, tr.is_disabled, CASE WHEN p.name = @valueOwner THEN CONVERT(nvarchar(600), p.value) END
                 FROM sys.triggers AS tr
                 JOIN sys.tables AS t ON t.object_id = tr.parent_id
                 JOIN sys.schemas AS s ON s.schema_id = t.schema_id
                 JOIN sys.sql_modules AS m ON m.object_id = tr.object_id
                 JOIN sys.extended_properties AS p ON p.class = 1 AND p.major_id = tr.object_id AND p.minor_id = 0
-                WHERE p.name = @owner
+                WHERE p.name IN (@owner, @valueOwner)
                 """;
             using (DbCommand command = SqlSchemaInitializer.CreateCommand(context, query))
             {
                 DbParameter owner = command.CreateParameter();
                 owner.ParameterName = "@owner";
-                owner.Value = OWNER_PROPERTY;
+                owner.Value = COUNT_OWNER;
                 command.Parameters.Add(owner);
+                DbParameter valueOwner = command.CreateParameter();
+                valueOwner.ParameterName = "@valueOwner";
+                valueOwner.Value = VALUE_OWNER;
+                command.Parameters.Add(valueOwner);
                 using (DbDataReader reader = command.ExecuteReader())
                 {
                     while (reader.Read())
@@ -83,7 +102,7 @@ namespace Blueprint.Database.Sql.Triggers
                         string schema = reader.GetString(0);
                         string source = sql.DelimitIdentifier(reader.GetString(1), schema);
                         string? create = reader.GetBoolean(4) || reader.IsDBNull(3) ? null : reader.GetString(3).ReplaceLineEndings("\n");
-                        installed.Add(sql.DelimitIdentifier(reader.GetString(2), schema), new Installed(source, create));
+                        installed.Add(sql.DelimitIdentifier(reader.GetString(2), schema), new Installed(reader.IsDBNull(5) ? source : reader.GetString(5), create));
                     }
                 }
             }
@@ -145,7 +164,7 @@ namespace Blueprint.Database.Sql.Triggers
                 ) AS c ON c.targetID = t.{id}
                 WHERE t.{count} <> COALESCE(c.total, 0);
                 """;
-            return new Definition(sourceTable.Schema!, sourceTable.Name, rule.Name, create.ReplaceLineEndings("\n"), backfill);
+            return new Definition(sourceTable.Schema!, sourceTable.Name, rule.Name, create.ReplaceLineEndings("\n"), backfill, COUNT_OWNER, null);
         }
     }
 }

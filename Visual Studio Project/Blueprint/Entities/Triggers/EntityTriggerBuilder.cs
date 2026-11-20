@@ -10,11 +10,11 @@ namespace Blueprint.Entities.Triggers
     /// <typeparam name="TEntity">The entity on which the trigger runs.</typeparam>
     public sealed class EntityTriggerBuilder<TEntity> where TEntity : BlueprintEntity
     {
-        private readonly List<CountTrigger> fTriggers;
+        private readonly EntityTriggerDeclarations fTriggers;
 
         /// <summary>Collects rules while Blueprint registers the entity model.</summary>
         /// <param name="triggers">The rules of the current model.</param>
-        internal EntityTriggerBuilder(List<CountTrigger> triggers)
+        internal EntityTriggerBuilder(EntityTriggerDeclarations triggers)
         {
             fTriggers = triggers;
         }
@@ -28,12 +28,34 @@ namespace Blueprint.Entities.Triggers
         /// <exception cref="ArgumentException">The name or a property selector is invalid.</exception>
         public void MaintainCount<TTarget>(string name, Expression<Func<TEntity, long?>> foreignKey, Expression<Func<TTarget, int>> counter, Expression<Func<TEntity, bool>>? include = null) where TTarget : BlueprintEntity
         {
+            ValidateName(name);
+            fTriggers.Counts.Add(new CountTrigger(name, typeof(TEntity), typeof(TTarget), GetProperty(foreignKey), GetProperty(counter), include));
+        }
+
+        /// <summary>Maintains a stored decimal from decimal arithmetic on the row and its referenced rows.</summary>
+        /// <typeparam name="TValue">A decimal or nullable decimal.</typeparam>
+        /// <param name="name">The name of the trigger on the maintained entity.</param>
+        /// <param name="target">The stored property that receives the result.</param>
+        /// <param name="value">The formula using mapped properties, decimal literals and arithmetic.</param>
+        public void MaintainValue<TValue>(string name, Expression<Func<TEntity, TValue>> target, Expression<Func<TEntity, TValue>> value)
+        {
+            ValidateName(name);
+            if (typeof(TValue) != typeof(decimal) && typeof(TValue) != typeof(decimal?))
+            {
+                throw new ArgumentException("MaintainValue requires a decimal or nullable decimal target.", nameof(target));
+            }
+            ArgumentNullException.ThrowIfNull(value);
+            fTriggers.Values.Add(new ValueTrigger(name, typeof(TEntity), GetProperty(target), value));
+        }
+
+        /// <summary>Validates a SQL Server trigger identifier before registration.</summary>
+        private static void ValidateName(string name)
+        {
             ArgumentException.ThrowIfNullOrWhiteSpace(name);
             if (name.Length > 128 || name != name.Trim() || name.Any(char.IsControl))
             {
                 throw new ArgumentException("A trigger name must be a SQL identifier of at most 128 characters.", nameof(name));
             }
-            fTriggers.Add(new CountTrigger(name, typeof(TEntity), typeof(TTarget), GetProperty(foreignKey), GetProperty(counter), include));
         }
 
         /// <summary>Resolves a direct property selector, including a required key lifted to nullable long.</summary>

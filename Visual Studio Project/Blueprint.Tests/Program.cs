@@ -21,6 +21,13 @@ namespace Blueprint.Tests
                 return 0;
             }
 
+            if (args.Contains("--entity-values"))
+            {
+                Entities.Triggers.ValueTriggerTest valueTest = new Entities.Triggers.ValueTriggerTest();
+                valueTest.RunTest();
+                return 0;
+            }
+
             if (args.Contains("--entity-triggers"))
             {
                 Entities.Triggers.CountTriggerTest triggerTest = new Entities.Triggers.CountTriggerTest();
