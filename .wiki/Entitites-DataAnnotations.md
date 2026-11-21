@@ -24,6 +24,7 @@ Select an annotation to jump to its description, example, and usage notes. The b
 | [InverseProperty](#inverseproperty) | `System.ComponentModel.DataAnnotations.Schema` | Pairs a navigation with the corresponding navigation on the other entity. |
 | [Precision](#precision) | `Microsoft.EntityFrameworkCore` | Sets decimal precision and scale. |
 | [DefaultValue](#defaultvalue) | `System.ComponentModel` | Configures a SQL default for the column. |
+| [DefaultValueSql](#defaultvaluesql) | `Blueprint.Entities.Annotations` | Uses a SQL expression as the column default. |
 | [ReadOnly](#readonly) | `System.ComponentModel` | Allows an initial value but rejects later changes when saving. |
 
 Caching is selected by deriving the entity class from `BlueprintEntityRAM`; the former `[RAMCached]` annotation has been removed. `AutoInclude` never enables caching for a `BlueprintEntityDB` class. See [AutoInclude data sources](Database-RAMCaching.md#autoinclude-data-sources).
@@ -280,6 +281,10 @@ public abstract int SortOrder { get; set; }
 ```
 
 This declares a SQL default of 10. It does not initialize `SortOrder` to 10 when `Create()` returns an object; the database default applies when an insert uses the generated default. Assign values explicitly when needed before saving. A default can also support adding a required column to an existing table; see [Schema Synchronization](Database-SchemaSynchronization.md#supported-changes).
+
+### DefaultValueSql
+
+Use `[DefaultValueSql("SYSUTCDATETIME()")]` on a `DateTime` property to let SQL Server supply the UTC timestamp when an insert omits the column. The Entity API reads the generated value back after insertion. Set the column precision with `[Column(TypeName = "datetime2(0)")]` for whole seconds. On a populated table, adding a required column this way gives existing rows the default value at migration time. Use either `DefaultValueSql` or `DefaultValue` on a property.
 
 ### ReadOnly
 

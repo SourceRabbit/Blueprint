@@ -259,7 +259,16 @@ namespace Blueprint.Database
                 propertyBuilder.IsRowVersion();
             }
             DefaultValueAttribute? defaultValue = property.GetCustomAttribute<DefaultValueAttribute>();
-            if (defaultValue != null)
+            DefaultValueSqlAttribute? defaultValueSql = property.GetCustomAttribute<DefaultValueSqlAttribute>();
+            if (defaultValueSql != null && defaultValue != null)
+            {
+                throw new InvalidOperationException($"Property '{property.DeclaringType}.{property.Name}' cannot declare both DefaultValue and DefaultValueSql.");
+            }
+            if (defaultValueSql != null)
+            {
+                propertyBuilder.HasDefaultValueSql(defaultValueSql.Sql);
+            }
+            else if (defaultValue != null)
             {
                 propertyBuilder.HasDefaultValue(defaultValue.Value);
             }

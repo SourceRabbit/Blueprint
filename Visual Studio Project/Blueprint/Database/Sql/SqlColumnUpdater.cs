@@ -31,7 +31,7 @@ namespace Blueprint.Database.Sql
                     hasRows ??= LockTable(context, tableName);
                     if (hasRows.Value && !target.IsNullable && target.DefaultValue == null && target.DefaultValueSql == null && !target.IsRowVersion && target.ComputedColumnSql == null)
                     {
-                        throw UnsafeChange(table, target, "A new required column in a populated table needs [DefaultValue(...)] or must be nullable.");
+                        throw UnsafeChange(table, target, "A new required column in a populated table needs [DefaultValue(...)] or [DefaultValueSql(...)], or must be nullable.");
                     }
                     changes.Add(target);
                     continue;
@@ -158,7 +158,7 @@ namespace Blueprint.Database.Sql
             return column.DefaultValueSql ?? (column.DefaultValue == null ? null : context.GetService<IRelationalTypeMappingSource>().FindMapping(column.ColumnType!)!.GenerateSqlLiteral(column.DefaultValue));
         }
 
-        /// <summary>Removes only outer parentheses from default expressions in system catalogs.</summary>
+        /// <summary>Removes catalog parentheses and normalizes the casing of unqualified no-argument functions.</summary>
         /// <param name="value">The SQL default.</param>
         /// <returns>The comparable expression.</returns>
         private static string? NormalizeDefault(string? value)
@@ -167,6 +167,11 @@ namespace Blueprint.Database.Sql
             while (value?.StartsWith('(') == true && value.EndsWith(')'))
             {
                 value = value[1..^1].Trim();
+            }
+            // SQL Server lowercases built-in function names. Preserve the case of literals and qualified identifiers.
+            if (value?.EndsWith("()", StringComparison.Ordinal) == true && value[..^2].All(character => char.IsAsciiLetterOrDigit(character) || character == '_'))
+            {
+                return value.ToLowerInvariant();
             }
             return value;
         }
