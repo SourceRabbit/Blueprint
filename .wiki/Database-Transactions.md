@@ -17,7 +17,9 @@ Select a member to jump to its description and example. Creating a transaction o
 | [CreateNewTransaction(prepare)](#createnewtransaction-with-preparation) | Stores a synchronous callback that prepares operations inside the SQL transaction. |
 | [new DatabaseTransaction()](#databasetransaction-constructor) | Creates an unbound transaction; the factory methods are the usual entry point. |
 | [AddInsert(entity)](#addinsert) | Queues insertion of an unsaved entity with ID zero. |
+| [AddInsertRange(entities)](#addinsertrange) | Queues independent new entities for one call to SaveChanges. |
 | [AddUpdate(entity)](#addupdate) | Queues an update of an existing entity. |
+| [AddUpdateRange(entities)](#addupdaterange) | Updates independent stored entities together using their supplied concurrency tokens. |
 | [AddDelete(entity)](#adddelete) | Queues deletion of an existing entity. |
 | [AddValidation(validation)](#addvalidation) | Registers a synchronous check after all writes and before commit. |
 | [ExecuteTransactionAsync(transaction, isolationLevel, cancellationToken)](#executetransactionasync) | Executes the transaction and returns the affected write count after commit. |
@@ -120,6 +122,14 @@ Console.WriteLine(product.ID);
 ```
 
 Leave `ID` at zero before insertion. SQL supplies the generated ID during execution; adding the operation alone leaves it unchanged. Insert referenced parents before their dependent entities. Navigation graphs are not inserted implicitly.
+
+### AddInsertRange
+
+Use one range per dependency level. For example, queue `transaction.AddInsertRange(parents)`, then `transaction.AddInsertRange(products)`, then `transaction.AddInsertRange(barcodes)`. Each entity counts as one operation. Each nonempty range uses one `SaveChanges` call and the SQL provider may split it into multiple database commands. Keys from a completed range are available to the next range. A failure rolls back all ranges in that transaction and restores their mapped entity values.
+
+### AddUpdateRange
+
+Pass distinct existing rows with positive IDs and their original concurrency tokens to `transaction.AddUpdateRange(products)`. Each row counts as one operation. The factory submits one `SaveChanges` per range and copies generated values back after saving. A missing row or stale rowversion aborts the whole transaction, including earlier ranges. For entities without concurrency tokens, read current values inside transaction preparation when preserving concurrent changes is required.
 
 ### AddUpdate
 

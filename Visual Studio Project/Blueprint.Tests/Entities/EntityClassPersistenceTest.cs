@@ -31,6 +31,8 @@ namespace Blueprint.Tests.Entities
                     {
                         database.RAMCacheRefreshInterval = TimeSpan.FromHours(1);
                         database.RegisterEntities(typeof(ClassRecord), typeof(PlainRecord));
+                        CheckInsertRangeRollback(database);
+                        CheckUpdateRange(database);
                         ClassGroup group = ClassGroup.Create();
                         group.Name = "Group";
                         ClassRecord record = ClassRecord.Create();
@@ -109,6 +111,72 @@ namespace Blueprint.Tests.Entities
                 }
             }
             Console.WriteLine($"Entity class persistence checks passed: {getAssertionCount()} assertions.");
+        }
+
+        /// <summary>Ελέγχει μαζικές ενημερώσεις με rowversion και rollback όταν μία γραμμή άλλαξε ή διαγράφηκε.</summary>
+        /// <param name="database">Η προσωρινή βάση του ελέγχου.</param>
+        /// <exception cref="InvalidOperationException">Οι τιμές της βάσης ή τα rowversions δεν συμφωνούν με την έκβαση της συναλλαγής.</exception>
+        private void CheckUpdateRange(BlueprintDatabase database)
+        {
+            ClassRecord first = ClassRecord.Create();
+            ClassRecord second = ClassRecord.Create();
+            first.Code = "bulk-a";
+            second.Code = "bulk-b";
+            DatabaseTransaction insert = database.TransactionFactory.CreateNewTransaction();
+            insert.AddInsertRange([first, second]);
+            database.TransactionFactory.ExecuteTransactionAsync(insert).GetAwaiter().GetResult();
+            ClassRecord stale = ClassRecord.SingleOrDefault(item => item.ID == second.ID)!;
+            byte[] firstVersion = first.Version.ToArray();
+            first.Code = "bulk-a2";
+            second.Code = "bulk-b2";
+            DatabaseTransaction update = database.TransactionFactory.CreateNewTransaction();
+            update.AddUpdateRange([first, second]);
+            Assert(database.TransactionFactory.ExecuteTransactionAsync(update).GetAwaiter().GetResult() == 2, "Both updates must commit together.");
+            Assert(!first.Version.SequenceEqual(firstVersion) && !second.Version.SequenceEqual(stale.Version), "Successful range updates must return new rowversions.");
+            firstVersion = first.Version.ToArray();
+            first.Code = "bulk-uncommitted";
+            DatabaseTransaction conflict = database.TransactionFactory.CreateNewTransaction();
+            conflict.AddUpdateRange([first]);
+            conflict.AddUpdateRange([stale]);
+            AssertThrows<DbUpdateConcurrencyException>(() => database.TransactionFactory.ExecuteTransactionAsync(conflict).GetAwaiter().GetResult(), "A stale rowversion must roll back earlier ranges.");
+            Assert(first.Version.SequenceEqual(firstVersion) && ClassRecord.SingleOrDefault(item => item.ID == first.ID)!.Code == "bulk-a2", "Rollback must restore generated values and database changes.");
+            ClassRecord.Delete(item => item.ID == second.ID);
+            DatabaseTransaction missing = database.TransactionFactory.CreateNewTransaction();
+            missing.AddUpdateRange([first, second]);
+            AssertThrows<DbUpdateConcurrencyException>(() => database.TransactionFactory.ExecuteTransactionAsync(missing).GetAwaiter().GetResult(), "A deleted row must fail the entire range.");
+            Assert(ClassRecord.SingleOrDefault(item => item.ID == first.ID)!.Code == "bulk-a2", "A missing sibling must not leave partial updates.");
+            ClassRecord.Delete(item => item.ID == first.ID);
+        }
+
+        /// <summary>Ελέγχει τις παραγόμενες τιμές διαδοχικών ομάδων εισαγωγής και την αποκατάστασή τους μετά από rollback.</summary>
+        /// <param name="database">Η προσωρινή βάση του ελέγχου.</param>
+        /// <exception cref="InvalidOperationException">Οι εγγραφές ή τα entities έχουν απροσδόκητη κατάσταση.</exception>
+        private void CheckInsertRangeRollback(BlueprintDatabase database)
+        {
+            ClassGroup first = ClassGroup.Create();
+            ClassGroup second = ClassGroup.Create();
+            first.Name = "First";
+            second.Name = "Second";
+            ClassRecord firstChild = ClassRecord.Create();
+            ClassRecord secondChild = ClassRecord.Create();
+            firstChild.Code = "first";
+            secondChild.Code = "second";
+            firstChild.Group = first;
+            secondChild.Group = second;
+            DatabaseTransaction transaction = database.TransactionFactory.CreateNewTransaction();
+            transaction.AddInsertRange([first, second]);
+            transaction.AddInsertRange([firstChild, secondChild]);
+            bool keysResolved = false;
+            transaction.AddValidation(() =>
+            {
+                keysResolved = first.ID > 0 && second.ID > 0 && first.ID != second.ID && firstChild.GroupID == first.ID && secondChild.GroupID == second.ID
+                    && firstChild.ID > 0 && secondChild.ID > 0 && firstChild.Version.Length == 8 && secondChild.Version.Length == 8;
+                throw new InvalidOperationException("Expected insert range rollback.");
+            });
+            AssertThrows<InvalidOperationException>(() => database.TransactionFactory.ExecuteTransactionAsync(transaction).GetAwaiter().GetResult(), "Validation must roll back both insert ranges.");
+            Assert(keysResolved && transaction.Operations.Count == 4, "Each child must receive the key of its own principal.");
+            Assert(first.ID == 0 && second.ID == 0 && firstChild.ID == 0 && secondChild.ID == 0 && firstChild.GroupID == null && secondChild.GroupID == null, "Rollback must restore all generated keys.");
+            Assert(firstChild.Version.Length == 0 && secondChild.Version.Length == 0 && !ClassGroup.Any() && !ClassRecord.Any(), "Rollback must restore rowversions and leave both tables empty.");
         }
     }
 

@@ -88,6 +88,56 @@ namespace Blueprint.Database.TransactionFactory
             AddOperation(EOperationType.Insert, entity);
         }
 
+        /// <summary>Registers independent new entities to be inserted together in one SaveChanges call.</summary>
+        /// <param name="entities">New entities. Register their new principals in an earlier operation or range.</param>
+        /// <remarks>Ranges execute in registration order in the same transaction. Each entity counts as one operation.</remarks>
+        /// <exception cref="ArgumentNullException">The collection or an entity is null.</exception>
+        /// <exception cref="ArgumentException">The collection contains the same instance more than once.</exception>
+        /// <exception cref="InvalidOperationException">Registration has closed.</exception>
+        public void AddInsertRange(IEnumerable<BlueprintEntity> entities)
+        {
+            AddRange(EOperationType.Insert, entities);
+        }
+
+        /// <summary>Queues independent existing entities for one SaveChanges call using their original concurrency tokens.</summary>
+        /// <param name="entities">Distinct stored rows, each with its current mapped values and original rowversion if applicable.</param>
+        /// <exception cref="ArgumentNullException">The sequence or one of its entries is null.</exception>
+        /// <exception cref="ArgumentException">An instance appears more than once.</exception>
+        /// <exception cref="InvalidOperationException">Registration has closed.</exception>
+        public void AddUpdateRange(IEnumerable<BlueprintEntity> entities)
+        {
+            AddRange(EOperationType.Update, entities);
+        }
+
+        /// <summary>Registers a contiguous range while retaining each row in the transaction's operation count.</summary>
+        /// <param name="operationType">Insert or update.</param>
+        /// <param name="entities">The independent entity instances.</param>
+        /// <exception cref="ArgumentNullException">An argument or entry is null.</exception>
+        /// <exception cref="ArgumentException">An instance appears twice.</exception>
+        /// <exception cref="InvalidOperationException">Registration has closed.</exception>
+        private void AddRange(EOperationType operationType, IEnumerable<BlueprintEntity> entities)
+        {
+            ArgumentNullException.ThrowIfNull(entities);
+            BlueprintEntity[] rows = entities.ToArray();
+            HashSet<BlueprintEntity> unique = new(ReferenceEqualityComparer.Instance);
+            foreach (BlueprintEntity entity in rows)
+            {
+                ArgumentNullException.ThrowIfNull(entity);
+                if (!unique.Add(entity))
+                {
+                    throw new ArgumentException("A transaction range cannot contain the same instance twice.", nameof(entities));
+                }
+            }
+            lock (fSyncRoot)
+            {
+                EnsureCanAdd();
+                for (int index = 0; index < rows.Length; index++)
+                {
+                    fOperations.Add(new Operation(operationType, rows[index], index == 0 ? rows.Length : 0));
+                }
+            }
+        }
+
         /// <summary>Registers an entity update after the operations already queued.</summary>
         /// <param name="entity">The entity containing the values to update.</param>
         /// <exception cref="ArgumentNullException">No entity was provided.</exception>
@@ -227,11 +277,15 @@ namespace Blueprint.Database.TransactionFactory
             /// <summary>Stores an operation description without executing it.</summary>
             /// <param name="operationType">The operation type.</param>
             /// <param name="entity">The entity reference validated by DatabaseTransaction.</param>
-            internal Operation(EOperationType operationType, BlueprintEntity entity)
+            /// <param name="rangeLength">Number of entries in a range beginning at this operation, or zero.</param>
+            internal Operation(EOperationType operationType, BlueprintEntity entity, int rangeLength = 0)
             {
                 fType = operationType;
                 fEntity = entity;
+                RangeLength = rangeLength;
             }
+
+            internal int RangeLength { get; }
 
             /// <summary>The registered operation type.</summary>
             public EOperationType Type

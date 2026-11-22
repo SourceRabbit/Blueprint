@@ -96,10 +96,22 @@ namespace Blueprint.Database.TransactionFactory
                                 cancellationToken.ThrowIfCancellationRequested();
                                 snapshots = CaptureTransactionValues(context, operations);
                                 int affectedRows = 0;
-                                foreach (DatabaseTransaction.Operation operation in operations)
+                                for (int index = 0; index < operations.Count;)
                                 {
                                     cancellationToken.ThrowIfCancellationRequested();
-                                    affectedRows += ExecuteTransactionOperation(context, operation);
+                                    DatabaseTransaction.Operation operation = operations[index];
+                                    if (operation.RangeLength > 0)
+                                    {
+                                        affectedRows += operation.Type == DatabaseTransaction.EOperationType.Update
+                                            ? ExecuteUpdateRange(context, operations, index, operation.RangeLength, cancellationToken)
+                                            : ExecuteInsertRange(context, operations, index, operation.RangeLength, cancellationToken);
+                                        index += operation.RangeLength;
+                                    }
+                                    else
+                                    {
+                                        affectedRows += ExecuteTransactionOperation(context, operation);
+                                        index++;
+                                    }
                                 }
                                 foreach (Action validation in validations)
                                 {
@@ -161,6 +173,92 @@ namespace Blueprint.Database.TransactionFactory
                 snapshots.Add(entity, values);
             }
             return snapshots;
+        }
+
+        /// <summary>Tracks only explicitly registered rows and saves them together after resolving keys from earlier operations.</summary>
+        /// <param name="context">The context with the shared transaction.</param>
+        /// <param name="operations">The prepared operation list.</param>
+        /// <param name="start">Index of the first row in the range.</param>
+        /// <param name="count">Number of independent inserts in this range.</param>
+        /// <param name="cancellationToken">Cancellation requested by the transaction caller.</param>
+        /// <returns>The number of entries saved.</returns>
+        /// <exception cref="ArgumentException">An entity already has a stored ID.</exception>
+        /// <exception cref="InvalidOperationException">A referenced principal is missing or its key conflicts.</exception>
+        /// <exception cref="DbUpdateException">The database rejected the range.</exception>
+        /// <exception cref="OperationCanceledException">Cancellation was requested.</exception>
+        private static int ExecuteInsertRange(BlueprintDatabaseContext context, IReadOnlyList<DatabaseTransaction.Operation> operations, int start, int count, CancellationToken cancellationToken)
+        {
+            try
+            {
+                for (int index = start; index < start + count; index++)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    BlueprintEntity entity = operations[index].Entity;
+                    if (entity.ID != 0)
+                    {
+                        throw new ArgumentException("New entities must have ID = 0.", nameof(operations));
+                    }
+                    EntityEntry entry = context.Entry(entity);
+                    ResolveTransactionReferences(entity, entry.Metadata);
+                    entry.State = EntityState.Added;
+                }
+                return context.SaveChanges();
+            }
+            finally
+            {
+                context.ChangeTracker.Clear();
+            }
+        }
+
+        /// <summary>Updates detached scalar copies together, using supplied concurrency tokens and returning generated values.</summary>
+        /// <param name="context">The reserved context inside the SQL transaction.</param>
+        /// <param name="operations">The frozen operation list.</param>
+        /// <param name="start">The first update in this range.</param>
+        /// <param name="count">The number of updates.</param>
+        /// <param name="cancellationToken">The transaction cancellation token.</param>
+        /// <returns>The number of entries saved.</returns>
+        /// <exception cref="ArgumentException">An entity has no stored key.</exception>
+        /// <exception cref="DbUpdateConcurrencyException">A row was deleted or its concurrency token changed.</exception>
+        /// <exception cref="DbUpdateException">The database rejected the changes.</exception>
+        /// <exception cref="OperationCanceledException">Cancellation was requested.</exception>
+        private static int ExecuteUpdateRange(BlueprintDatabaseContext context, IReadOnlyList<DatabaseTransaction.Operation> operations, int start, int count, CancellationToken cancellationToken)
+        {
+            List<EntityEntry> entries = new(count);
+            try
+            {
+                for (int index = start; index < start + count; index++)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    BlueprintEntity entity = operations[index].Entity;
+                    if (entity.ID <= 0)
+                    {
+                        throw new ArgumentException("Update requires a stored entity with a positive ID.", nameof(operations));
+                    }
+                    EntityEntry source = context.Entry(entity);
+                    ResolveTransactionReferences(entity, source.Metadata);
+                    EntityEntry entry = context.Entry(source.CurrentValues.ToObject());
+                    entry.State = EntityState.Modified;
+                    foreach (IProperty token in entry.Metadata.GetProperties().Where(property => property.IsConcurrencyToken))
+                    {
+                        entry.Property(token.Name).OriginalValue = source.Property(token.Name).CurrentValue;
+                    }
+                    entries.Add(entry);
+                }
+                int affected = context.SaveChanges();
+                for (int offset = 0; offset < count; offset++)
+                {
+                    EntityEntry entry = entries[offset];
+                    foreach (IProperty property in entry.Metadata.GetProperties().Where(property => property.ValueGenerated != ValueGenerated.Never))
+                    {
+                        property.PropertyInfo!.SetValue(operations[start + offset].Entity, entry.Property(property.Name).CurrentValue);
+                    }
+                }
+                return affected;
+            }
+            finally
+            {
+                context.ChangeTracker.Clear();
+            }
         }
 
         /// <summary>Executes one explicit operation without automatically saving an entire graph and clears tracking before the next operation.</summary>
