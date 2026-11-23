@@ -1,6 +1,6 @@
 # SMTPEmailSender
 
-`SMTPEmailSender` implements the synchronous `Send` and asynchronous `SendAsync` methods of `BlueprintEmailSender`. Each call opens an SMTP connection and completes when the server accepts the message. Connection, authentication, and submission errors propagate to the caller.
+`SMTPEmailSender` implements the synchronous `Send` and asynchronous `SendAsync` methods of [BlueprintEmailSender](Email-BlueprintEmailSender.md). Each call opens an SMTP connection and completes when the server accepts the message. Connection, authentication, and submission errors propagate to the caller.
 
 ## Send a message
 

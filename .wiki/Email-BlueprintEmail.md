@@ -49,4 +49,6 @@ static async Task SendReceiptAsync(BlueprintEmailSender sender, string customerE
 }
 ```
 
+## BlueprintEmailAttachment
+
 `BlueprintEmailAttachment` copies the supplied bytes and uses the file name you provide as the attachment name. The MIME type defaults to `application/octet-stream` when omitted. Add one attachment to `email.Attachments` for each file.

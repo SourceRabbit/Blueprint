@@ -39,7 +39,11 @@ This manual describes the consumer API available in this repository. Examples ta
 
 ## Email
 
-- [BlueprintEmail](Email-BlueprintEmail.md) shows how to compose a message, add recipients and attachments, and send it through a `BlueprintEmailSender`.
+- **Messages**
+  - [BlueprintEmail](Email-BlueprintEmail.md) describes the sender address, recipients, subject, and body of a message.
+  - [BlueprintEmailAttachment](Email-BlueprintEmail.md#blueprintemailattachment) describes an attached file, its contents, and its MIME type.
+- **Senders**
+  - [BlueprintEmailSender](Email-BlueprintEmailSender.md) defines the shared methods for synchronous and asynchronous email submission.
   - [SMTPEmailSender](Email-SMTPEmailSender.md) covers SMTP connection settings, authentication, and sending an invoice by email.
 
 ## Log
