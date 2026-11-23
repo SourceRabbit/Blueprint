@@ -30,7 +30,7 @@ namespace Blueprint.Database.TransactionFactory
         }
 
         /// <summary>Creates a transaction that reads data and prepares its operation list within the same SQL isolation scope.</summary>
-        /// <param name="prepare">A synchronous callback for queries and AddInsert/AddUpdate/AddDelete/AddValidation, before writes.</param>
+        /// <param name="prepare">A synchronous callback for queries and registration of writes and validations before execution.</param>
         /// <returns>The new transaction for this database.</returns>
         /// <remarks>ExecuteTransactionAsync runs the callback on its reserved context, without direct CRUD or asynchronous work. Entity values are captured for rollback after preparation; the consumer is responsible for its own earlier changes.</remarks>
         /// <exception cref="ArgumentNullException">No callback was provided.</exception>
@@ -102,9 +102,13 @@ namespace Blueprint.Database.TransactionFactory
                                     DatabaseTransaction.Operation operation = operations[index];
                                     if (operation.RangeLength > 0)
                                     {
-                                        affectedRows += operation.Type == DatabaseTransaction.EOperationType.Update
-                                            ? ExecuteUpdateRange(context, operations, index, operation.RangeLength, cancellationToken)
-                                            : ExecuteInsertRange(context, operations, index, operation.RangeLength, cancellationToken);
+                                        affectedRows += operation.Type switch
+                                        {
+                                            DatabaseTransaction.EOperationType.Insert => ExecuteInsertRange(context, operations, index, operation.RangeLength, cancellationToken),
+                                            DatabaseTransaction.EOperationType.Update => ExecuteUpdateRange(context, operations, index, operation.RangeLength, cancellationToken),
+                                            DatabaseTransaction.EOperationType.Delete => ExecuteDeleteRange(context, operations, index, operation.RangeLength, cancellationToken),
+                                            _ => throw new InvalidOperationException("Unknown transaction range operation.")
+                                        };
                                         index += operation.RangeLength;
                                     }
                                     else
@@ -254,6 +258,40 @@ namespace Blueprint.Database.TransactionFactory
                     }
                 }
                 return affected;
+            }
+            finally
+            {
+                context.ChangeTracker.Clear();
+            }
+        }
+
+        /// <summary>Deletes the supplied rows in one save using their keys and concurrency tokens.</summary>
+        /// <param name="context">The context reserved for the transaction.</param>
+        /// <param name="operations">The prepared operation list.</param>
+        /// <param name="start">The index of the first delete in the range.</param>
+        /// <param name="count">The number of rows to delete.</param>
+        /// <param name="cancellationToken">The transaction cancellation token.</param>
+        /// <returns>The number of entries deleted.</returns>
+        /// <exception cref="ArgumentException">An entity has no stored key.</exception>
+        /// <exception cref="DbUpdateConcurrencyException">A row is missing or its concurrency token has changed.</exception>
+        /// <exception cref="DbUpdateException">The database rejected a delete.</exception>
+        /// <exception cref="OperationCanceledException">Cancellation was requested.</exception>
+        private static int ExecuteDeleteRange(BlueprintDatabaseContext context, IReadOnlyList<DatabaseTransaction.Operation> operations, int start, int count, CancellationToken cancellationToken)
+        {
+            try
+            {
+                for (int index = start; index < start + count; index++)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    BlueprintEntity entity = operations[index].Entity;
+                    if (entity.ID <= 0)
+                    {
+                        throw new ArgumentException("Delete requires a stored entity with a positive ID.", nameof(operations));
+                    }
+                    object row = context.Entry(entity).CurrentValues.ToObject();
+                    context.Entry(row).State = EntityState.Deleted;
+                }
+                return context.SaveChanges();
             }
             finally
             {

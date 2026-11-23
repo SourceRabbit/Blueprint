@@ -110,7 +110,7 @@ namespace Blueprint.Database.TransactionFactory
         }
 
         /// <summary>Registers a contiguous range while retaining each row in the transaction's operation count.</summary>
-        /// <param name="operationType">Insert or update.</param>
+        /// <param name="operationType">The operation to register for each entity in the range.</param>
         /// <param name="entities">The independent entity instances.</param>
         /// <exception cref="ArgumentNullException">An argument or entry is null.</exception>
         /// <exception cref="ArgumentException">An instance appears twice.</exception>
@@ -154,6 +154,16 @@ namespace Blueprint.Database.TransactionFactory
         public void AddDelete(BlueprintEntity entity)
         {
             AddOperation(EOperationType.Delete, entity);
+        }
+
+        /// <summary>Queues existing entities for deletion together using their supplied concurrency tokens.</summary>
+        /// <param name="entities">Distinct stored rows to delete, in registration order.</param>
+        /// <exception cref="ArgumentNullException">The collection or an entity is null.</exception>
+        /// <exception cref="ArgumentException">The collection contains the same instance more than once.</exception>
+        /// <exception cref="InvalidOperationException">Registration has closed.</exception>
+        public void AddDeleteRange(IEnumerable<BlueprintEntity> entities)
+        {
+            AddRange(EOperationType.Delete, entities);
         }
 
         /// <summary>Registers a synchronous check that runs after all writes and before commit.</summary>

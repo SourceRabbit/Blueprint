@@ -33,6 +33,7 @@ namespace Blueprint.Tests.Entities
                         database.RegisterEntities(typeof(ClassRecord), typeof(PlainRecord));
                         CheckInsertRangeRollback(database);
                         CheckUpdateRange(database);
+                        CheckDeleteRange(database);
                         ClassGroup group = ClassGroup.Create();
                         group.Name = "Group";
                         ClassRecord record = ClassRecord.Create();
@@ -146,6 +147,46 @@ namespace Blueprint.Tests.Entities
             AssertThrows<DbUpdateConcurrencyException>(() => database.TransactionFactory.ExecuteTransactionAsync(missing).GetAwaiter().GetResult(), "A deleted row must fail the entire range.");
             Assert(ClassRecord.SingleOrDefault(item => item.ID == first.ID)!.Code == "bulk-a2", "A missing sibling must not leave partial updates.");
             ClassRecord.Delete(item => item.ID == first.ID);
+        }
+
+        /// <summary>Checks delete range registration, commit, and rollback on stale or missing rows.</summary>
+        /// <param name="database">The isolated test database.</param>
+        /// <exception cref="InvalidOperationException">A delete range produced an unexpected outcome.</exception>
+        private void CheckDeleteRange(BlueprintDatabase database)
+        {
+            ClassRecord first = ClassRecord.Create();
+            ClassRecord second = ClassRecord.Create();
+            first.Code = "delete-first";
+            second.Code = "delete-second";
+            DatabaseTransaction insert = database.TransactionFactory.CreateNewTransaction();
+            insert.AddInsertRange([first, second]);
+            database.TransactionFactory.ExecuteTransactionAsync(insert).GetAwaiter().GetResult();
+
+            ClassRecord stale = ClassRecord.SingleOrDefault(item => item.ID == second.ID)!;
+            second.Code = "delete-updated";
+            ClassRecord.Update(second);
+            DatabaseTransaction conflict = database.TransactionFactory.CreateNewTransaction();
+            conflict.AddDeleteRange([first, stale]);
+            AssertThrows<DbUpdateConcurrencyException>(() => database.TransactionFactory.ExecuteTransactionAsync(conflict).GetAwaiter().GetResult(), "A stale rowversion must fail the delete range.");
+            Assert(ClassRecord.Where(item => item.ID == first.ID || item.ID == second.ID).Count() == 2, "Both rows must survive a stale delete.");
+
+            DatabaseTransaction delete = database.TransactionFactory.CreateNewTransaction();
+            delete.AddDeleteRange(Array.Empty<ClassRecord>());
+            AssertThrows<ArgumentNullException>(() => delete.AddDeleteRange([first, null!]), "A null range entry must be rejected.");
+            AssertThrows<ArgumentException>(() => delete.AddDeleteRange([second, second]), "A repeated instance must be rejected.");
+            Assert(delete.Operations.Count == 0, "Empty and invalid ranges must leave the queue unchanged.");
+            delete.AddDeleteRange([second, first]);
+            Assert(delete.Operations.Count == 2 && delete.Operations[0].Entity == second && delete.Operations[1].Entity == first, "The queue must retain both entity references in input order.");
+            Assert(database.TransactionFactory.ExecuteTransactionAsync(delete).GetAwaiter().GetResult() == 2 && !ClassRecord.Any(), "The delete range must remove both rows and report both writes.");
+
+            ClassRecord newRecord = ClassRecord.Create();
+            DatabaseTransaction missing = database.TransactionFactory.CreateNewTransaction(pending =>
+            {
+                pending.AddInsert(newRecord);
+                pending.AddDeleteRange([first]);
+            });
+            AssertThrows<DbUpdateConcurrencyException>(() => database.TransactionFactory.ExecuteTransactionAsync(missing).GetAwaiter().GetResult(), "A missing row must fail the delete range.");
+            Assert(newRecord.ID == 0 && !ClassRecord.Any(), "A failed delete range must roll back earlier writes.");
         }
 
         /// <summary>Ελέγχει τις παραγόμενες τιμές διαδοχικών ομάδων εισαγωγής και την αποκατάστασή τους μετά από rollback.</summary>

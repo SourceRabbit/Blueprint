@@ -21,6 +21,7 @@ Select a member to jump to its description and example. Creating a transaction o
 | [AddUpdate(entity)](#addupdate) | Queues an update of an existing entity. |
 | [AddUpdateRange(entities)](#addupdaterange) | Updates independent stored entities together using their supplied concurrency tokens. |
 | [AddDelete(entity)](#adddelete) | Queues deletion of an existing entity. |
+| [AddDeleteRange(entities)](#adddeleterange) | Queues deletion of existing entities together, checking each row's concurrency tokens. |
 | [AddValidation(validation)](#addvalidation) | Registers a synchronous check after all writes and before commit. |
 | [ExecuteTransactionAsync(transaction, isolationLevel, cancellationToken)](#executetransactionasync) | Executes the transaction and returns the affected write count after commit. |
 | [Operations](#operations) | Gets a read-only snapshot of queued CRUD operations. |
@@ -160,6 +161,21 @@ await database.TransactionFactory.ExecuteTransactionAsync(transaction);
 
 This method takes an entity, not a predicate. It requires a positive ID and fails during execution if the row is missing or its concurrency token no longer matches. Queue dependent deletes before parent deletes; related entities are not deleted implicitly. See [Concurrency](Entitites-DataAnnotations.md#concurrency).
 
+### AddDeleteRange
+
+`AddDeleteRange(IEnumerable<BlueprintEntity> entities)` enumerates the collection when called and queues one delete per entity in input order. An empty collection adds no operations. A null collection, a null item, or a repeated instance raises an exception before any part of the range is queued.
+
+```csharp
+DatabaseTransaction transaction = database.TransactionFactory.CreateNewTransaction(pending =>
+{
+    IEnumerable<Product> products = Product.Where(item => item.SKU == "DEMO-001" || item.SKU == "DEMO-002");
+    pending.AddDeleteRange(products);
+});
+int deletedRows = await database.TransactionFactory.ExecuteTransactionAsync(transaction);
+```
+
+Pass distinct stored rows with positive IDs. Each nonempty range uses one `SaveChanges` call during execution. A missing row or stale concurrency token causes the whole transaction to roll back, including earlier writes. When deleting related rows, queue the dependents in an earlier range than their parents.
+
 ## Insert, update, and delete together
 
 This example assumes the [Product contract](Database-EShopCheckoutTutorial.md#define-a-contract), an active `database`, and two different existing IDs supplied by the application.
@@ -258,7 +274,7 @@ await database.TransactionFactory.ExecuteTransactionAsync(transaction, Isolation
 
 The factory stores the callback; it does not run it immediately. Execution opens the SQL transaction, runs preparation, captures entity values for rollback, executes writes, validates, and commits.
 
-Preparation may query, edit the entities it is preparing, and call `AddInsert`, `AddUpdate`, `AddDelete`, or `AddValidation`. Use these queued operations instead of direct CRUD. The callback is synchronous and must not start asynchronous work. Only the preparation thread may add operations after submission; concurrent callers cannot keep extending the transaction.
+Preparation may query, edit the entities it is preparing, queue individual writes or ranges, and call `AddValidation`. Use these queued operations instead of direct CRUD. The callback is synchronous and must not start asynchronous work. Only the preparation thread may add operations after submission; concurrent callers cannot keep extending the transaction.
 
 Use isolation appropriate to the rule. Putting reads inside a `ReadCommitted` transaction does not by itself protect every read-modify-write decision from other processes. The example uses `Serializable`; concurrency tokens can also detect stale writes.
 
