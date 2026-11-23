@@ -37,6 +37,11 @@ This manual describes the consumer API available in this repository. Examples ta
 
 - [Background Tasks](BackgroundTasks.md): register work, use interval or daily schedules, and control execution.
 
+## Email
+
+- [BlueprintEmail](Email-BlueprintEmail.md) shows how to compose a message, add recipients and attachments, and send it through a `BlueprintEmailSender`.
+  - [SMTPEmailSender](Email-SMTPEmailSender.md) covers SMTP connection settings, authentication, and sending an invoice by email.
+
 ## Log
 
 - [BlueprintLog](Log-BlueprintLog.md): understand the abstract `BlueprintLog` API, log levels, results, and available or planned implementations.
