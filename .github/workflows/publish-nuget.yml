@@ -22,7 +22,7 @@ jobs:
           dotnet-version: '10.0.x'
 
       - name: Pack Blueprint
-        run: dotnet pack "Visual Studio Project/Blueprint/Blueprint.csproj" -c Release -o artifacts -p:Version="$GITHUB_REF_NAME"
+        run: dotnet pack "Visual Studio Project/Blueprint/Blueprint.csproj" -c Release -o "$RUNNER_TEMP/nuget" -p:Version="$GITHUB_REF_NAME"
 
       - name: Sign in to NuGet
         id: login
@@ -33,4 +33,4 @@ jobs:
       - name: Publish package
         env:
           NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
-        run: dotnet nuget push artifacts/*.nupkg --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json
+        run: dotnet nuget push "$RUNNER_TEMP/nuget/SourceRabbit.Blueprint.$GITHUB_REF_NAME.nupkg" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json
