@@ -1,8 +1,12 @@
 # Blueprint User Manual
 
+<img src="https://raw.githubusercontent.com/SourceRabbit/Blueprint/main/Assets/BlueprintLogo.png" alt="Blueprint logo" width="120" align="left">
+
 Blueprint is a backend application framework for .NET, **designed to provide a stable, consistent API across different underlying technologies**. Applications interact with Blueprint’s contracts and services, allowing infrastructure choices to evolve independently of business logic.
 
 This manual describes the consumer API available in this repository. Examples target **.NET 10 and C# 14**. Start with [Getting Started](GettingStarted.md) to add Blueprint to your project, then follow [EShop - Checkout Tutorial](Database-EShopCheckoutTutorial.md) for a complete application example.
+
+<br clear="left">
 
 ## Getting Started
 
