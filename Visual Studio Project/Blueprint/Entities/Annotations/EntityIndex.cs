@@ -48,5 +48,8 @@ namespace Blueprint.Entities.Annotations
 
         /// <summary>Whether the combination of values must be unique.</summary>
         public bool IsUnique { get; set; }
+
+        /// <summary>The translation to use for multilingual properties. Shared properties keep their ordinary mapping.</summary>
+        public EIndexLanguageScope LanguageScope { get; set; }
     }
 }

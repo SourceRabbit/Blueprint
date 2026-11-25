@@ -79,6 +79,20 @@ public abstract class Product : BlueprintEntityDB
 
 The example requires unique SKU values. Supply C# property names, such as `nameof(SKU)`, rather than physical column names. Pass several property names for a composite index, or apply the annotation more than once for separate indexes. Navigation and `NotMapped` properties cannot be indexed. Creating a unique index can fail if existing rows contain duplicates; see [Schema Synchronization](Database-SchemaSynchronization.md).
 
+To index a multilingual property, select the stored translation explicitly. This declaration makes each non-null brand title unique in the configured default language (the language with an empty prefix).
+
+```csharp
+[Entity("Brands")]
+[EntityIndex("UX_Brands_Title", nameof(Title), IsUnique = true, LanguageScope = EIndexLanguageScope.DefaultLanguage)]
+public abstract class Brand : BlueprintEntityDB
+{
+    [Multilingual, MaxLength(64)]
+    public abstract string? Title { get; set; }
+}
+```
+
+Other languages can share translations. SQL Server's filtered unique index allows multiple null default titles. For composite indexes, the scope resolves each multilingual property to its default-language column and preserves the order and mapping of shared properties. This uses the stored value independently of display fallback.
+
 ### Multilingual
 
 Apply `[Multilingual]` to a mapped string property to store a separate value for every configured language:

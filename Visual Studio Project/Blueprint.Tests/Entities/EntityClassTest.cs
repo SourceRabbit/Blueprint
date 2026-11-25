@@ -39,6 +39,12 @@ namespace Blueprint.Tests.Entities
 
                 database.RegisterEntities(typeof(ClassRecord));
                 Assert(database.TableCount == 2, "Related classes must map to two tables without common base tables or discriminators.");
+                using (BlueprintDatabaseContext context = database.GetContext())
+                {
+                    string ddl = context.Database.GenerateCreateScript();
+                    Assert(ddl.Contains("CREATE UNIQUE INDEX [UX_ClassRecords_Code_Title] ON [dbo].[ClassRecords] ([Code], [Title])", StringComparison.Ordinal),
+                        "A composite index must use the shared code and the inherited default-language title.");
+                }
                 record = ClassRecord.Create();
                 Assert(record is BlueprintEntityRAM && record.GetType().BaseType == typeof(ClassRecord), "Generated entities must derive from the user's class.");
                 Assert(record.ID == 0 && record.CurrentLanguage == 7, "Creation must preserve the inherited identity and configured default language.");
@@ -285,6 +291,7 @@ namespace Blueprint.Tests.Entities
     /// <summary>Συνδυάζει υλοποιημένα properties και constructor με inherited μεταφράσεις και σχέση.</summary>
     [Entity("ClassRecords")]
     [EntityIndex("UX_ClassRecords_Code", nameof(Code), IsUnique = true)]
+    [EntityIndex("UX_ClassRecords_Code_Title", nameof(Code), nameof(Title), IsUnique = true, LanguageScope = EIndexLanguageScope.DefaultLanguage)]
     public class ClassRecord : ClassRecordBase
     {
         /// <summary>Ορίζει αρχική μετάφραση χρησιμοποιώντας το επιλεγμένο language του generated instance.</summary>

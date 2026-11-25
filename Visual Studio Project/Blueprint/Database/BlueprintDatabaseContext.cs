@@ -161,11 +161,18 @@ namespace Blueprint.Database
 
                 foreach (EntityIndex index in contract.GetCustomAttributes<EntityIndex>())
                 {
-                    if (index.PropertyNames.Any(name => builder.Metadata.FindProperty(name) == null))
+                    string[] propertyNames = index.LanguageScope switch
+                    {
+                        EIndexLanguageScope.None => index.PropertyNames.ToArray(),
+                        EIndexLanguageScope.DefaultLanguage => index.PropertyNames.Select(name => builder.Metadata.FindProperty(name) != null
+                            ? name : LanguageColumns.getPropertyName(name, fEntityTypes.DefaultLanguageID)).ToArray(),
+                        _ => throw new InvalidOperationException($"Index '{index.Name}' on entity '{contract}' has an unsupported language scope.")
+                    };
+                    if (propertyNames.Any(name => builder.Metadata.FindProperty(name) == null))
                     {
                         throw new InvalidOperationException($"Index '{index.Name}' on entity '{contract}' must reference mapped scalar properties.");
                     }
-                    builder.HasIndex(index.PropertyNames.ToArray()).HasDatabaseName(index.Name).IsUnique(index.IsUnique);
+                    builder.HasIndex(propertyNames).HasDatabaseName(index.Name).IsUnique(index.IsUnique);
                 }
             }
 
