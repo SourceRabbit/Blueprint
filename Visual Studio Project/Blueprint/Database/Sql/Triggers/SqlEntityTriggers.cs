@@ -15,7 +15,7 @@ namespace Blueprint.Database.Sql.Triggers
     {
         private const string COUNT_OWNER = "Blueprint.MaintainCount";
         internal const string VALUE_OWNER = "Blueprint.MaintainValue";
-        internal sealed record Definition(string Schema, string Table, string Name, string Create, string Backfill, string Owner, string? DeclaringTable);
+        internal sealed record Definition(string Schema, string Table, string Name, string Create, string Backfill, string Owner, string? DeclaringTable, bool ReplaceExisting = false);
         private sealed record Installed(string DeclaringTable, string? Create);
 
         /// <summary>Reconciles trigger definitions only for source tables present in this model.</summary>
@@ -32,8 +32,10 @@ namespace Blueprint.Database.Sql.Triggers
             ISqlGenerationHelper sql = context.GetService<ISqlGenerationHelper>();
             HashSet<string> sources = context.Model.GetEntityTypes().Select(entity => sql.DelimitIdentifier(entity.GetTableName()!, entity.GetSchema())).ToHashSet(StringComparer.OrdinalIgnoreCase);
             Dictionary<string, Definition> desired = new Dictionary<string, Definition>(StringComparer.OrdinalIgnoreCase);
+            SqlDistinctRows.Plan[] distinct = context.EntityTypes.Triggers.DistinctRows.Select(rule => SqlDistinctRows.Build(context, sql, rule)).ToArray();
             IEnumerable<Definition> definitions = context.EntityTypes.Triggers.Counts.Select(rule => Build(context, sql, rule))
-                .Concat(context.EntityTypes.Triggers.Values.SelectMany(rule => SqlValueTriggers.Build(context, sql, rule)));
+                .Concat(context.EntityTypes.Triggers.Values.SelectMany(rule => SqlValueTriggers.Build(context, sql, rule)))
+                .Concat(distinct.SelectMany(plan => plan.Triggers));
             foreach (Definition definition in definitions)
             {
                 string name = sql.DelimitIdentifier(definition.Name, definition.Schema);
@@ -51,6 +53,7 @@ namespace Blueprint.Database.Sql.Triggers
                 }
             }
             List<string> backfills = new List<string>();
+            List<string> procedureBackfills = SynchronizeProcedures(context, sql, sources, distinct);
             foreach ((string name, Definition definition) in desired)
             {
                 if (installed.TryGetValue(name, out Installed? existing) && existing.Create == definition.Create)
@@ -58,12 +61,18 @@ namespace Blueprint.Database.Sql.Triggers
                     continue;
                 }
                 // CREATE holds a schema modification lock on the source until backfill and commit finish.
+                if (definition.ReplaceExisting && existing == null)
+                {
+                    string parent = sql.DelimitIdentifier(definition.Table, definition.Schema);
+                    string drop = $"DROP TRIGGER {name}";
+                    context.Database.ExecuteSqlInterpolated($"IF EXISTS (SELECT 1 FROM sys.triggers WHERE object_id = OBJECT_ID({name}) AND parent_id = OBJECT_ID({parent})) EXEC sys.sp_executesql {drop}");
+                }
                 SqlSchemaInitializer.ExecuteCommand(context, definition.Create);
                 object owner = (object?)definition.DeclaringTable ?? 1;
                 context.Database.ExecuteSqlInterpolated($"EXEC sys.sp_addextendedproperty @name={definition.Owner}, @value={owner}, @level0type=N'SCHEMA', @level0name={definition.Schema}, @level1type=N'TABLE', @level1name={definition.Table}, @level2type=N'TRIGGER', @level2name={definition.Name}");
                 backfills.Add(definition.Backfill);
             }
-            foreach (string backfill in backfills.Distinct(StringComparer.Ordinal))
+            foreach (string backfill in backfills.Concat(procedureBackfills).Distinct(StringComparer.Ordinal))
             {
                 SqlSchemaInitializer.ExecuteCommand(context, backfill);
             }
@@ -77,13 +86,13 @@ namespace Blueprint.Database.Sql.Triggers
         {
             Dictionary<string, Installed> installed = new Dictionary<string, Installed>(StringComparer.OrdinalIgnoreCase);
             const string query = """
-                SELECT s.name, t.name, tr.name, m.definition, tr.is_disabled, CASE WHEN p.name = @valueOwner THEN CONVERT(nvarchar(600), p.value) END
+                SELECT s.name, t.name, tr.name, m.definition, tr.is_disabled, CASE WHEN p.name IN (@valueOwner, @distinctOwner) THEN CONVERT(nvarchar(600), p.value) END
                 FROM sys.triggers AS tr
                 JOIN sys.tables AS t ON t.object_id = tr.parent_id
                 JOIN sys.schemas AS s ON s.schema_id = t.schema_id
                 JOIN sys.sql_modules AS m ON m.object_id = tr.object_id
                 JOIN sys.extended_properties AS p ON p.class = 1 AND p.major_id = tr.object_id AND p.minor_id = 0
-                WHERE p.name IN (@owner, @valueOwner)
+                WHERE p.name IN (@owner, @valueOwner, @distinctOwner)
                 """;
             using (DbCommand command = SqlSchemaInitializer.CreateCommand(context, query))
             {
@@ -95,6 +104,10 @@ namespace Blueprint.Database.Sql.Triggers
                 valueOwner.ParameterName = "@valueOwner";
                 valueOwner.Value = VALUE_OWNER;
                 command.Parameters.Add(valueOwner);
+                DbParameter distinctOwner = command.CreateParameter();
+                distinctOwner.ParameterName = "@distinctOwner";
+                distinctOwner.Value = SqlDistinctRows.OWNER;
+                command.Parameters.Add(distinctOwner);
                 using (DbDataReader reader = command.ExecuteReader())
                 {
                     while (reader.Read())
@@ -107,6 +120,48 @@ namespace Blueprint.Database.Sql.Triggers
                 }
             }
             return installed;
+        }
+
+        /// <summary>Installs the shared synchronization routine before its source triggers and backfills changed rules.</summary>
+        private static List<string> SynchronizeProcedures(BlueprintDatabaseContext context, ISqlGenerationHelper sql, HashSet<string> sources, SqlDistinctRows.Plan[] plans)
+        {
+            Dictionary<string, SqlDistinctRows.Procedure> desired = plans.Select(plan => plan.Procedure)
+                .ToDictionary(p => sql.DelimitIdentifier(p.Name, p.Schema), StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, Installed> installed = new Dictionary<string, Installed>(StringComparer.OrdinalIgnoreCase);
+            const string query = """
+                SELECT SCHEMA_NAME(pr.schema_id), pr.name, CONVERT(nvarchar(600), ep.value), m.definition
+                FROM sys.procedures pr JOIN sys.sql_modules m ON m.object_id = pr.object_id
+                JOIN sys.extended_properties ep ON ep.class = 1 AND ep.major_id = pr.object_id AND ep.minor_id = 0
+                WHERE ep.name = N'Blueprint.MaintainDistinctRows'
+                """;
+            using (DbCommand command = SqlSchemaInitializer.CreateCommand(context, query))
+            using (DbDataReader reader = command.ExecuteReader())
+            {
+                while (reader.Read())
+                {
+                    installed.Add(sql.DelimitIdentifier(reader.GetString(1), reader.GetString(0)),
+                        new Installed(reader.GetString(2), reader.IsDBNull(3) ? null : reader.GetString(3).ReplaceLineEndings("\n")));
+                }
+            }
+            foreach ((string name, Installed existing) in installed)
+            {
+                if (sources.Contains(existing.DeclaringTable) && (!desired.TryGetValue(name, out SqlDistinctRows.Procedure? procedure) || existing.Create != procedure.Create))
+                {
+                    SqlSchemaInitializer.ExecuteCommand(context, $"DROP PROCEDURE {name}");
+                }
+            }
+            List<string> backfills = new List<string>();
+            foreach ((string name, SqlDistinctRows.Procedure procedure) in desired)
+            {
+                if (installed.TryGetValue(name, out Installed? existing) && existing.Create == procedure.Create)
+                {
+                    continue;
+                }
+                SqlSchemaInitializer.ExecuteCommand(context, procedure.Create);
+                context.Database.ExecuteSqlInterpolated($"EXEC sys.sp_addextendedproperty @name={SqlDistinctRows.OWNER}, @value={procedure.Target}, @level0type=N'SCHEMA', @level0name={procedure.Schema}, @level1type=N'PROCEDURE', @level1name={procedure.Name}");
+                backfills.Add(procedure.Backfill);
+            }
+            return backfills;
         }
 
         /// <summary>Builds set-based maintenance and initial population from EF's physical mappings.</summary>

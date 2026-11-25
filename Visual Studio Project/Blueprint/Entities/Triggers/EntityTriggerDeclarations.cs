@@ -50,6 +50,19 @@ namespace Blueprint.Entities.Triggers
                     throw new InvalidOperationException($"Multiple rules maintain '{rule.Entity.Name}.{rule.Target}'.");
                 }
             }
+            HashSet<Type> rowTargets = new HashSet<Type>();
+            foreach (DistinctRowsRule rule in rules.DistinctRows)
+            {
+                if (rule.Changes.Count == 0 || !rowTargets.Add(rule.Target) || (rule.Values != null && !rowTargets.Add(rule.Values.Entity)))
+                {
+                    throw new InvalidOperationException($"Distinct-row rule '{rule.Name}' requires a changed source and exclusive ownership of each target table.");
+                }
+            }
+            if (!registered.IsSupersetOf(rowTargets) || rules.DistinctRows.SelectMany(rule => rule.Changes)
+                .Any(change => !registered.Contains(change.Entity) || rowTargets.Contains(change.Entity)))
+            {
+                throw new InvalidOperationException("Distinct-row sources and targets must be registered, and maintained tables cannot be changed sources.");
+            }
             rules.RequiresNestedTriggers = rules.Values.Any(rule => rule.Inputs.Any(input =>
                 maintained.Contains((input.Navigation?.PropertyType ?? rule.Entity, input.Property.Name))));
             // Installation and initial population follow the same dependency order as runtime updates.
@@ -72,5 +85,6 @@ namespace Blueprint.Entities.Triggers
         internal bool RequiresNestedTriggers { get; private set; }
         internal List<CountTrigger> Counts { get; } = new List<CountTrigger>();
         internal List<ValueTrigger> Values { get; } = new List<ValueTrigger>();
+        internal List<DistinctRowsRule> DistinctRows { get; } = new List<DistinctRowsRule>();
     }
 }

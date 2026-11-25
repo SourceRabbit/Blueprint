@@ -7,6 +7,7 @@ Declare a trigger in C# when a stored value must stay in sync with other rows or
 - [Declare a trigger](#declare-a-trigger)
 - [MaintainCount](#maintaincount)
 - [MaintainValue](#maintainvalue)
+- [MaintainDistinctRows](#maintaindistinctrows)
 - [Registration and existing rows](#registration-and-existing-rows)
 - [Related topics](#related-topics)
 
@@ -149,6 +150,41 @@ public abstract class Product : BlueprintEntityDB
 With a net price of `100.00` and a rate of `24.00`, the stored price is `124.00`. Updating just the category’s `Rate` to `13.00` changes its `PriceMultiplier` to `1.1300` and the product’s `PriceWithVAT` to `113.00`. The same update reaches every product in that category. Changing a single product’s net price or assigning it a different VAT category recalculates that product’s price. SQL Server’s `nested triggers` option must be enabled for chained rules.
 
 The formula supports decimal literals, stored `decimal` or `decimal?` properties on the entity or a direct reference, and the operators `+`, `-`, `*` and `/`. SQL Server rounds the result to the destination column’s scale. A null net price produces a null result and a zero net price produces `0.00`. Give a required generated column a database default for the initial insert, as shown on `PriceMultiplier`. Formula dependencies must be acyclic.
+
+## MaintainDistinctRows
+
+Use `MaintainDistinctRows` when other tables determine which rows should exist. For example, a catalog can store one row for each category and attribute used by a listed product. The following declaration assumes that each `Listing` supplies a category, an attribute and an optional text value.
+
+```csharp
+// On CategoryFilter, with a unique index on (CategoryID, AttributeID).
+[EntityTriggers]
+public static void ConfigureTriggers(EntityTriggerBuilder<CategoryFilter> triggers)
+{
+    triggers.MaintainDistinctRows(
+        name: "Sync_CategoryFilters",
+        key: filter => new { filter.CategoryID, filter.AttributeID },
+        rows: db => db.Rows<Listing>()
+            .Where(item => item.IsListed)
+            .Select(item => new
+            {
+                item.CategoryID,
+                item.AttributeID,
+                Value = item.Text == null ? null : item.Text.Trim()
+            }))
+        .WithValues<CategoryFilterValue>(v => v.CategoryFilterID, v => v.Value, row => row.Value)
+        .OnChange<Listing>("TR_Listings_CategoryFilters",
+            (_, changed) => changed.Select(item => new { item.CategoryID, item.AttributeID }),
+            item => new { item.CategoryID, item.AttributeID, item.IsListed, item.Text });
+}
+```
+
+`rows` describes the entire desired result using a composable, parameter-free LINQ projection that SQL Server can execute. Use a named projection such as `new { row.CategoryID }` even for a single key. The projected key names and types must match the target properties. Declare a unique index on those required properties in the same order. Blueprint inserts new keys, keeps the IDs of existing keys, and removes a key when its last source disappears. The rule owns the contents of its target tables.
+
+`WithValues` adds an optional child table with a required foreign key to the parent and a required string column. Declare a unique index on that foreign key followed by the value. Null or empty projected values produce no child. A parent still exists if the query emits its key. Source queries can explicitly trim input, as in the example.
+
+Declare an `OnChange` for **each source table** whose writes can change the result. Its `changed` query contains both the old and new rows from the whole SQL statement. Project both the old and new keys when a row moves. Keep eligibility conditions such as `IsListed` in `rows` so that an item leaving the result also refreshes its old key. Use `db.Rows<T>()` to follow related tables where necessary. The optional final property selector skips updates when all watched properties are unchanged.
+
+Register the source, target and optional child contracts together. Schema synchronization generates one procedure per rule and one trigger per declared change source. Installing or repairing them reconciles existing rows in the schema transaction. Subsequent writes refresh only the affected keys, in the same transaction as the write. During a migration, specify `replaceExisting: true` on an individual `OnChange` to adopt an existing trigger with that exact name on that table.
 
 ## Registration and existing rows
 

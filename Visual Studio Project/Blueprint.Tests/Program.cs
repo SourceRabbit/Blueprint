@@ -28,6 +28,12 @@ namespace Blueprint.Tests
                 return 0;
             }
 
+            if (args.Contains("--distinct-rows"))
+            {
+                new Entities.Triggers.DistinctRowsTest().RunTest();
+                return 0;
+            }
+
             if (args.Contains("--entity-values"))
             {
                 Entities.Triggers.ValueTriggerTest valueTest = new Entities.Triggers.ValueTriggerTest();

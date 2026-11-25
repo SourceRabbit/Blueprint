@@ -184,6 +184,11 @@ namespace Blueprint.Database
                 }
             }
 
+            foreach (Type source in fEntityTypes.Triggers.DistinctRows.SelectMany(rule => rule.Changes).Select(change => change.Entity).Distinct())
+            {
+                modelBuilder.Entity(fEntityTypes.Types[source]).ToTable(table => table.UseSqlOutputClause(false));
+            }
+
             foreach (CountTrigger rule in fEntityTypes.Triggers.Counts)
             {
                 EntityTypeBuilder source = modelBuilder.Entity(fEntityTypes.Types[rule.Source]);

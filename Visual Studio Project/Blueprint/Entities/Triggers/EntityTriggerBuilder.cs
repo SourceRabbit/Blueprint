@@ -32,6 +32,29 @@ namespace Blueprint.Entities.Triggers
             fTriggers.Counts.Add(new CountTrigger(name, typeof(TEntity), typeof(TTarget), GetProperty(foreignKey), GetProperty(counter), include));
         }
 
+        /// <summary>Maintains one target row per distinct non-null key in a composable relational projection.</summary>
+        /// <typeparam name="TKey">The named key projection shared by the target and change queries.</typeparam>
+        /// <typeparam name="TRow">The named projection of desired keys and optional child values.</typeparam>
+        /// <param name="name">Name of the generated synchronization procedure within the target schema.</param>
+        /// <param name="key">An anonymous projection of target properties covered by a unique index.</param>
+        /// <param name="rows">A SQL-translatable projection containing the same named key fields and optional child value.</param>
+        /// <returns>The declaration of affected source tables and optional child values.</returns>
+        public DistinctRowsBuilder<TKey, TRow> MaintainDistinctRows<TKey, TRow>(string name, Expression<Func<TEntity, TKey>> key, Func<DistinctRowsQuery, IQueryable<TRow>> rows)
+        {
+            ValidateName(name);
+            ArgumentNullException.ThrowIfNull(key);
+            ArgumentNullException.ThrowIfNull(rows);
+            string[] properties = DistinctRowsRule.Properties(key);
+            if (properties.Any(property => typeof(TRow).GetProperty(property)?.PropertyType != typeof(TEntity).GetProperty(property)?.PropertyType
+                || typeof(TKey).GetProperty(property) == null))
+            {
+                throw new ArgumentException("The key and rows projections must expose the named target key properties with their mapped types.", nameof(key));
+            }
+            DistinctRowsRule rule = new DistinctRowsRule(name, typeof(TEntity), properties, query => rows(query));
+            fTriggers.DistinctRows.Add(rule);
+            return new DistinctRowsBuilder<TKey, TRow>(rule);
+        }
+
         /// <summary>Maintains a stored decimal from decimal arithmetic on the row and its referenced rows.</summary>
         /// <typeparam name="TValue">A decimal or nullable decimal.</typeparam>
         /// <param name="name">The name of the trigger on the maintained entity.</param>
@@ -49,7 +72,7 @@ namespace Blueprint.Entities.Triggers
         }
 
         /// <summary>Validates a SQL Server trigger identifier before registration.</summary>
-        private static void ValidateName(string name)
+        internal static void ValidateName(string name)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(name);
             if (name.Length > 128 || name != name.Trim() || name.Any(char.IsControl))
