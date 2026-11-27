@@ -32,6 +32,16 @@ namespace Blueprint.Entities.Triggers
             fTriggers.Counts.Add(new CountTrigger(name, typeof(TEntity), typeof(TTarget), GetProperty(foreignKey), GetProperty(counter), include));
         }
 
+        /// <summary>Maintains the depth of each node when a hierarchy is inserted or reparented.</summary>
+        /// <param name="name">The trigger name, unique within the entity's SQL schema.</param>
+        /// <param name="parentID">The nullable foreign key referencing another row of this entity.</param>
+        /// <param name="level">The stored integer depth. A root has level zero.</param>
+        public void MaintainHierarchyLevel(string name, Expression<Func<TEntity, long?>> parentID, Expression<Func<TEntity, int>> level)
+        {
+            ValidateName(name);
+            fTriggers.HierarchyLevels.Add(new HierarchyLevelTrigger(name, typeof(TEntity), GetProperty(parentID), GetProperty(level)));
+        }
+
         /// <summary>Maintains one target row per distinct non-null key in a composable relational projection.</summary>
         /// <typeparam name="TKey">The named key projection shared by the target and change queries.</typeparam>
         /// <typeparam name="TRow">The named projection of desired keys and optional child values.</typeparam>

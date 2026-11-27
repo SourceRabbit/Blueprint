@@ -43,6 +43,13 @@ namespace Blueprint.Entities.Triggers
                     throw new InvalidOperationException($"Trigger '{rule.Name}' must own a distinct counter on a registered target entity.");
                 }
             }
+            foreach (HierarchyLevelTrigger rule in rules.HierarchyLevels)
+            {
+                if (!maintained.Add((rule.Entity, rule.Level)))
+                {
+                    throw new InvalidOperationException($"Multiple rules maintain '{rule.Entity.Name}.{rule.Level}'.");
+                }
+            }
             foreach (ValueTrigger rule in rules.Values)
             {
                 if (!maintained.Add((rule.Entity, rule.Target)))
@@ -84,6 +91,7 @@ namespace Blueprint.Entities.Triggers
 
         internal bool RequiresNestedTriggers { get; private set; }
         internal List<CountTrigger> Counts { get; } = new List<CountTrigger>();
+        internal List<HierarchyLevelTrigger> HierarchyLevels { get; } = new List<HierarchyLevelTrigger>();
         internal List<ValueTrigger> Values { get; } = new List<ValueTrigger>();
         internal List<DistinctRowsRule> DistinctRows { get; } = new List<DistinctRowsRule>();
     }

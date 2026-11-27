@@ -34,6 +34,7 @@ namespace Blueprint.Database.Sql.Triggers
             Dictionary<string, Definition> desired = new Dictionary<string, Definition>(StringComparer.OrdinalIgnoreCase);
             SqlDistinctRows.Plan[] distinct = context.EntityTypes.Triggers.DistinctRows.Select(rule => SqlDistinctRows.Build(context, sql, rule)).ToArray();
             IEnumerable<Definition> definitions = context.EntityTypes.Triggers.Counts.Select(rule => Build(context, sql, rule))
+                .Concat(context.EntityTypes.Triggers.HierarchyLevels.Select(rule => SqlHierarchyLevelTriggers.Build(context, sql, rule)))
                 .Concat(context.EntityTypes.Triggers.Values.SelectMany(rule => SqlValueTriggers.Build(context, sql, rule)))
                 .Concat(distinct.SelectMany(plan => plan.Triggers));
             foreach (Definition definition in definitions)
@@ -92,7 +93,7 @@ namespace Blueprint.Database.Sql.Triggers
                 JOIN sys.schemas AS s ON s.schema_id = t.schema_id
                 JOIN sys.sql_modules AS m ON m.object_id = tr.object_id
                 JOIN sys.extended_properties AS p ON p.class = 1 AND p.major_id = tr.object_id AND p.minor_id = 0
-                WHERE p.name IN (@owner, @valueOwner, @distinctOwner)
+                WHERE p.name IN (@owner, @valueOwner, @distinctOwner, @hierarchyOwner)
                 """;
             using (DbCommand command = SqlSchemaInitializer.CreateCommand(context, query))
             {
@@ -108,6 +109,10 @@ namespace Blueprint.Database.Sql.Triggers
                 distinctOwner.ParameterName = "@distinctOwner";
                 distinctOwner.Value = SqlDistinctRows.OWNER;
                 command.Parameters.Add(distinctOwner);
+                DbParameter hierarchyOwner = command.CreateParameter();
+                hierarchyOwner.ParameterName = "@hierarchyOwner";
+                hierarchyOwner.Value = SqlHierarchyLevelTriggers.OWNER;
+                command.Parameters.Add(hierarchyOwner);
                 using (DbDataReader reader = command.ExecuteReader())
                 {
                     while (reader.Read())

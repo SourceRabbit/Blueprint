@@ -196,6 +196,17 @@ namespace Blueprint.Database
                 modelBuilder.Entity(fEntityTypes.Types[source]).ToTable(table => table.UseSqlOutputClause(false));
             }
 
+            foreach (HierarchyLevelTrigger rule in fEntityTypes.Triggers.HierarchyLevels)
+            {
+                EntityTypeBuilder entity = modelBuilder.Entity(fEntityTypes.Types[rule.Entity]);
+                if (entity.Metadata.FindProperty(rule.Level)?.ClrType != typeof(int))
+                {
+                    throw new InvalidOperationException($"Trigger '{rule.Name}' requires a mapped integer level on '{rule.Entity.Name}'.");
+                }
+                entity.Property<int>(rule.Level).HasDefaultValue(0).ValueGeneratedOnAddOrUpdate();
+                entity.ToTable(table => table.UseSqlOutputClause(false));
+            }
+
             foreach (CountTrigger rule in fEntityTypes.Triggers.Counts)
             {
                 EntityTypeBuilder source = modelBuilder.Entity(fEntityTypes.Types[rule.Source]);
