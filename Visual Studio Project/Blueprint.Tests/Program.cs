@@ -34,6 +34,12 @@ namespace Blueprint.Tests
                 return 0;
             }
 
+            if (args.Contains("--hierarchy-level"))
+            {
+                new Entities.Triggers.HierarchyLevelTriggerTest().RunTest();
+                return 0;
+            }
+
             if (args.Contains("--entity-values"))
             {
                 Entities.Triggers.ValueTriggerTest valueTest = new Entities.Triggers.ValueTriggerTest();

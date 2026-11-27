@@ -6,6 +6,7 @@ Declare a trigger in C# when a stored value must stay in sync with other rows or
 
 - [Declare a trigger](#declare-a-trigger)
 - [MaintainCount](#maintaincount)
+- [MaintainHierarchyLevel](#maintainhierarchylevel)
 - [MaintainValue](#maintainvalue)
 - [MaintainDistinctRows](#maintaindistinctrows)
 - [Registration and existing rows](#registration-and-existing-rows)
@@ -76,6 +77,16 @@ public abstract class Product : BlueprintEntityDB
 The foreign key must be a mapped `long` or `long?` referencing the target ID. The counter is a stored `int`. The attributes on `ProductsCount` keep the zero default and database-generated mapping even when the application registers `Brand` on its own.
 
 Omitting `include` counts every assigned product, including inactive products. To count only active products, add `include: product => product.IsActive` to the call. The predicate supports comparisons of mapped, non-nullable Boolean, enum and integer properties with literals, combined with `&&`, `||` and `!`.
+
+## MaintainHierarchyLevel
+
+Use `MaintainHierarchyLevel` for a tree with a nullable `long` foreign key to the same entity and a stored `int` level. Expose the level as a getter with `[DefaultValue(0), DatabaseGenerated(DatabaseGeneratedOption.Computed)]`. Declare the rule in the entity's `[EntityTriggers]` method:
+
+```csharp
+triggers.MaintainHierarchyLevel("TR_Categories_Level", category => category.ParentID, category => category.Level);
+```
+
+A root has level zero. Inserting or changing a parent updates the depth of the affected subtree in the same transaction. Multi-row operations use the final parent relationships, including moves that affect overlapping subtrees. Cycles are rejected. Registration initializes levels when installing or repairing the trigger. Ordinary changes to other columns do not traverse the tree.
 
 ## MaintainValue
 

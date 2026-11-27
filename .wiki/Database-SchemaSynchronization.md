@@ -46,7 +46,7 @@ Registration requires appropriate SQL permissions, including creation or alterat
 
 ## Entity count triggers
 
-For C# declarations and worked examples of `MaintainCount`, `MaintainValue` and `MaintainDistinctRows`, see [Entity Triggers](Entitites-EntityTriggers.md).
+For C# declarations and examples of `MaintainCount`, `MaintainHierarchyLevel`, `MaintainValue` and `MaintainDistinctRows`, see [Entity Triggers](Entitites-EntityTriggers.md).
 
 A public static method marked `[EntityTriggers]` receives an `EntityTriggerBuilder<TSource>`. For example, this method on an inventory item counts rows with a non-null owner and includes only items that are listed.
 
